@@ -40,6 +40,7 @@ interface SearchQueryTrace {
 
 export class SearchRepository {
   private client: SearchClient<AlertSearchDocument>;
+  private readonly SEARCH_TIMEOUT_MS = 30000; // 30 seconds
 
   constructor() {
     this.client = new SearchClient<AlertSearchDocument>(
@@ -51,6 +52,17 @@ export class SearchRepository {
     logger.info('[Azure Search] Repository initialized', {
       endpoint: config.search.endpoint,
       indexName: config.search.indexName
+    });
+  }
+
+  /**
+   * Creates a timeout promise that rejects after specified milliseconds
+   */
+  private createTimeoutPromise(timeoutMs: number): Promise<never> {
+    return new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new ServiceError(`Search timeout exceeded (${timeoutMs}ms). Please refine your query.`));
+      }, timeoutMs);
     });
   }
 
@@ -244,8 +256,12 @@ export class SearchRepository {
         useSemanticSearch: params.useSemanticSearch
       });
 
-      // Execute search
-      const searchResults = await this.client.search(searchText, searchOptions);
+      // Execute search with timeout protection
+      const searchPromise = this.client.search(searchText, searchOptions);
+      const searchResults = await Promise.race([
+        searchPromise,
+        this.createTimeoutPromise(this.SEARCH_TIMEOUT_MS)
+      ]);
 
       // Collect results
       const results: AlertSearchDocument[] = [];
@@ -334,7 +350,12 @@ export class SearchRepository {
         select: ['id', 'title', 'category', 'severity', 'status'] as any
       };
 
-      const suggestResults = await this.client.suggest(searchText, 'sg', suggestOptions);
+      // Execute with timeout protection
+      const suggestPromise = this.client.suggest(searchText, 'sg', suggestOptions);
+      const suggestResults = await Promise.race([
+        suggestPromise,
+        this.createTimeoutPromise(this.SEARCH_TIMEOUT_MS)
+      ]);
 
       const suggestions = suggestResults.results.map(result => ({
         text: result.text,
@@ -378,7 +399,12 @@ export class SearchRepository {
         top: Math.min(top, 20) // Max 20 suggestions
       };
 
-      const autocompleteResults = await this.client.autocomplete(searchText, suggesterName, autocompleteOptions);
+      // Execute with timeout protection
+      const autocompletePromise = this.client.autocomplete(searchText, suggesterName, autocompleteOptions);
+      const autocompleteResults = await Promise.race([
+        autocompletePromise,
+        this.createTimeoutPromise(this.SEARCH_TIMEOUT_MS)
+      ]);
 
       const suggestions = autocompleteResults.results.map(result => result.text);
 

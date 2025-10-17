@@ -8,6 +8,7 @@ import { alertEventService } from '../services/AlertEventService';
 import { handleError, successResponse, ValidationError } from '../utils/errorHandler';
 import { logger } from '../utils/logger';
 import { validateFunctionKey } from '../middleware/authentication';
+import { checkRateLimit, createRateLimitResponse, RATE_LIMITS } from '../middleware/rateLimit';
 import { validateId } from '../utils/validator';
 
 async function getAlertEventById(
@@ -44,6 +45,12 @@ async function getAlertEventById(
     }
 
     logger.info('Authentication successful', { userId: authResult.userId });
+
+    // Rate limiting check
+    const rateLimitResult = checkRateLimit(request, 'getById', RATE_LIMITS.getById);
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(rateLimitResult);
+    }
 
     // Get and validate ID parameter
     const id = request.params.id;

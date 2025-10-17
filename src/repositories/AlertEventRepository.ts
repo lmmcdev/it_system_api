@@ -35,11 +35,23 @@ export class AlertEventRepository {
   private database: Database | null = null;
   private container: Container | null = null;
   private isInitialized: boolean = false;
+  private readonly QUERY_TIMEOUT_MS = 30000; // 30 seconds
 
   constructor() {
     this.client = new CosmosClient({
       endpoint: config.cosmos.endpoint,
       key: config.cosmos.key
+    });
+  }
+
+  /**
+   * Creates a timeout promise that rejects after specified milliseconds
+   */
+  private createTimeoutPromise(timeoutMs: number): Promise<never> {
+    return new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new ServiceError(`Query timeout exceeded (${timeoutMs}ms). Please refine your query.`));
+      }, timeoutMs);
     });
   }
 
@@ -102,7 +114,12 @@ export class AlertEventRepository {
 
       logger.info('[CosmosDB] Fetching alert event by ID', { id });
 
-      const response = await container.item(id, id).read<AlertEventDocument>();
+      // Add timeout protection
+      const readPromise = container.item(id, id).read<AlertEventDocument>();
+      const response = await Promise.race([
+        readPromise,
+        this.createTimeoutPromise(this.QUERY_TIMEOUT_MS)
+      ]);
 
       const executionTime = Date.now() - startTime;
 
@@ -264,7 +281,7 @@ export class AlertEventRepository {
         hasContinuationToken: !!options?.continuationToken
       });
 
-      // Execute query with pagination
+      // Execute query with pagination and timeout protection
       const queryIterator = container.items.query<AlertEventDocument>(
         {
           query: query,
@@ -276,7 +293,11 @@ export class AlertEventRepository {
         }
       );
 
-      const response = await queryIterator.fetchNext();
+      const queryPromise = queryIterator.fetchNext();
+      const response = await Promise.race([
+        queryPromise,
+        this.createTimeoutPromise(this.QUERY_TIMEOUT_MS)
+      ]);
 
       const executionTime = Date.now() - startTime;
 

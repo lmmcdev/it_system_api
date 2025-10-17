@@ -8,6 +8,7 @@ import { searchService } from '../services/SearchService';
 import { handleError, successResponse, ValidationError } from '../utils/errorHandler';
 import { logger } from '../utils/logger';
 import { validateFunctionKey } from '../middleware/authentication';
+import { checkRateLimit, createRateLimitResponse, RATE_LIMITS } from '../middleware/rateLimit';
 
 async function searchSuggestions(
   request: HttpRequest,
@@ -43,6 +44,12 @@ async function searchSuggestions(
     }
 
     logger.info('Authentication successful', { userId: authResult.userId });
+
+    // Rate limiting check
+    const rateLimitResult = checkRateLimit(request, 'suggestions', RATE_LIMITS.suggestions);
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(rateLimitResult);
+    }
 
     // Get query parameters
     const searchText = request.query.get('q') || request.query.get('search');

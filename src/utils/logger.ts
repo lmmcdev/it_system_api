@@ -102,14 +102,35 @@ class Logger {
   }
 
   /**
+   * Sanitize error message to remove sensitive information
+   */
+  private sanitizeMessage(message: string): string {
+    return message
+      // Remove Windows file paths
+      .replace(/[A-Za-z]:\\[\w\\\-\.]+/g, '[PATH]')
+      // Remove Unix file paths (only common sensitive paths)
+      .replace(/\/(home|var|usr|opt|root)\/[\w\/\-\.]+/g, '[PATH]')
+      // Remove credentials from connection strings
+      .replace(/key=[\w\-]+/gi, 'key=[REDACTED]')
+      .replace(/password=[\w\-]+/gi, 'password=[REDACTED]')
+      .replace(/secret=[\w\-]+/gi, 'secret=[REDACTED]')
+      // Remove bearer tokens
+      .replace(/Bearer\s+[\w\-\.]+/gi, 'Bearer [REDACTED]');
+  }
+
+  /**
    * Custom replacer for JSON.stringify to handle Error objects
+   * In production, stack traces are omitted for security
    */
   private errorReplacer(_key: string, value: unknown): unknown {
     if (value instanceof Error) {
+      const isDevelopment = process.env.NODE_ENV === 'development';
+
       return {
         name: value.name,
-        message: value.message,
-        stack: value.stack
+        message: this.sanitizeMessage(value.message),
+        // Only include stack trace in development mode
+        ...(isDevelopment && { stack: value.stack })
       };
     }
     return value;

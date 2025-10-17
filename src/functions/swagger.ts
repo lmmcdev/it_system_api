@@ -5,6 +5,7 @@
 
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { openApiSpec } from '../config/openapi';
+import { checkRateLimit, createRateLimitResponse, RATE_LIMITS } from '../middleware/rateLimit';
 
 /**
  * Serve OpenAPI JSON specification
@@ -13,8 +14,14 @@ app.http('swaggerJson', {
   methods: ['GET'],
   route: 'swagger/openapi.json',
   authLevel: 'anonymous',
-  handler: async (_request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+  handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     context.log('Serving OpenAPI specification');
+
+    // Rate limiting check
+    const rateLimitResult = checkRateLimit(request, 'swagger', RATE_LIMITS.swagger);
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(rateLimitResult);
+    }
 
     return {
       status: 200,
@@ -36,6 +43,12 @@ app.http('swagger', {
   authLevel: 'anonymous',
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     context.log('Serving Swagger UI');
+
+    // Rate limiting check
+    const rateLimitResult = checkRateLimit(request, 'swagger', RATE_LIMITS.swagger);
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(rateLimitResult);
+    }
 
     try {
       // Get the base URL from the request

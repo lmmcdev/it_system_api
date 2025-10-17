@@ -339,3 +339,164 @@ export function validateAlertFilters(filters: {
     sanitized: Object.keys(sanitized).length > 0 ? sanitized : undefined
   };
 }
+
+/**
+ * Validates and sanitizes an array of filter values
+ * Prevents excessive array lengths and validates individual values
+ */
+export function validateFilterArray(
+  value: string | null | undefined,
+  fieldName: string,
+  allowedValues?: string[],
+  maxItems: number = 10,
+  maxLength: number = 50
+): string[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  // Split by comma and trim
+  const items = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+  // Check array length
+  if (items.length > maxItems) {
+    throw new Error(
+      `Filter "${fieldName}" can contain at most ${maxItems} values`
+    );
+  }
+
+  // Validate each item
+  const validatedItems: string[] = [];
+
+  for (const item of items) {
+    // Check individual value length
+    if (item.length > maxLength) {
+      throw new Error(
+        `Filter value in "${fieldName}" exceeds maximum length of ${maxLength} characters`
+      );
+    }
+
+    // Check for control characters
+    if (/[\x00-\x1F\x7F]/.test(item)) {
+      throw new Error(
+        `Filter "${fieldName}" contains invalid control characters`
+      );
+    }
+
+    // Remove XSS vectors
+    const sanitized = item.replace(/[<>\"'`]/g, '');
+
+    if (sanitized !== item) {
+      throw new Error(
+        `Filter "${fieldName}" contains invalid characters`
+      );
+    }
+
+    // Validate against whitelist if provided
+    if (allowedValues && !allowedValues.includes(sanitized)) {
+      throw new Error(
+        `Invalid value for "${fieldName}": ${sanitized}`
+      );
+    }
+
+    validatedItems.push(sanitized);
+  }
+
+  return validatedItems.length > 0 ? validatedItems : undefined;
+}
+
+/**
+ * Enhanced search text validation with Unicode normalization
+ * Prevents injection attacks and validates content
+ */
+export function validateSearchText(
+  searchText: string | null | undefined,
+  minLength: number = 2,
+  maxLength: number = 100
+): string {
+  if (!searchText || typeof searchText !== 'string') {
+    throw new Error('Search text is required');
+  }
+
+  // Normalize Unicode to prevent normalization attacks
+  const normalized = searchText.normalize('NFKC');
+
+  // Check length after normalization
+  if (normalized.length < minLength) {
+    throw new Error(
+      `Search text must be at least ${minLength} characters long`
+    );
+  }
+
+  if (normalized.length > maxLength) {
+    throw new Error(
+      `Search text cannot exceed ${maxLength} characters`
+    );
+  }
+
+  // Reject excessive special characters (potential injection)
+  const alphanumericCount = (normalized.match(/[a-zA-Z0-9]/g) || []).length;
+  const spaceCount = (normalized.match(/\s/g) || []).length;
+  const totalAcceptable = alphanumericCount + spaceCount;
+
+  if (totalAcceptable < normalized.length * 0.3) {
+    throw new Error(
+      'Search text must contain at least 30% alphanumeric characters'
+    );
+  }
+
+  // Reject control characters
+  if (/[\x00-\x1F\x7F]/.test(normalized)) {
+    throw new Error(
+      'Search text contains invalid control characters'
+    );
+  }
+
+  return normalized;
+}
+
+/**
+ * Validates array of field selections for search
+ * Prevents excessive field selection and validates against whitelist
+ */
+export function validateFieldSelection(
+  fields: string[] | undefined,
+  allowedFields: string[],
+  maxFields: number = 20
+): string[] | undefined {
+  if (!fields || fields.length === 0) {
+    return undefined;
+  }
+
+  if (fields.length > maxFields) {
+    throw new Error(
+      `Cannot select more than ${maxFields} fields`
+    );
+  }
+
+  const validatedFields: string[] = [];
+
+  for (const field of fields) {
+    const trimmed = field.trim();
+
+    if (trimmed.length === 0) {
+      continue;
+    }
+
+    if (trimmed.length > 50) {
+      throw new Error(
+        `Field name "${trimmed}" exceeds maximum length`
+      );
+    }
+
+    if (!allowedFields.includes(trimmed)) {
+      throw new Error(
+        `Invalid field name: ${trimmed}`
+      );
+    }
+
+    validatedFields.push(trimmed);
+  }
+
+  return validatedFields.length > 0 ? validatedFields : undefined;
+}

@@ -8,6 +8,8 @@ import { searchService } from '../services/SearchService';
 import { handleError, successResponse, ValidationError } from '../utils/errorHandler';
 import { logger } from '../utils/logger';
 import { validateFunctionKey } from '../middleware/authentication';
+import { checkRateLimit, createRateLimitResponse, RATE_LIMITS } from '../middleware/rateLimit';
+import { validateFilterArray, validateSearchText } from '../utils/validator';
 import { SearchQueryParams } from '../models/SearchModels';
 
 async function searchAlerts(
@@ -45,8 +47,24 @@ async function searchAlerts(
 
     logger.info('Authentication successful', { userId: authResult.userId });
 
-    // Parse query parameters
-    const searchText = request.query.get('q') || request.query.get('search');
+    // Rate limiting check
+    const rateLimitResult = checkRateLimit(request, 'search', RATE_LIMITS.search);
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    // Parse and validate search text
+    const rawSearchText = request.query.get('q') || request.query.get('search');
+    let searchText: string | undefined;
+
+    if (rawSearchText) {
+      try {
+        searchText = validateSearchText(rawSearchText, 1, 200);
+      } catch (error) {
+        throw new ValidationError((error as Error).message);
+      }
+    }
+
     const top = request.query.get('top');
     const skip = request.query.get('skip');
     const select = request.query.get('select');
@@ -115,39 +133,51 @@ async function searchAlerts(
       useSemanticSearch
     };
 
-    // Build filter object
-    if (
-      severity ||
-      status ||
-      category ||
-      classification ||
-      productName ||
-      detectionSource ||
-      serviceSource ||
-      incidentId ||
-      tenantId ||
-      assignedTo ||
-      createdDateStart ||
-      createdDateEnd ||
-      resolvedDateStart ||
-      resolvedDateEnd
-    ) {
-      queryParams.filter = {
-        severity: severity ? severity.split(',').map(s => s.trim()) : undefined,
-        status: status ? status.split(',').map(s => s.trim()) : undefined,
-        category: category ? category.split(',').map(c => c.trim()) : undefined,
-        classification: classification ? classification.split(',').map(c => c.trim()) : undefined,
-        productName: productName ? productName.split(',').map(p => p.trim()) : undefined,
-        detectionSource: detectionSource ? detectionSource.split(',').map(d => d.trim()) : undefined,
-        serviceSource: serviceSource ? serviceSource.split(',').map(s => s.trim()) : undefined,
-        incidentId: incidentIdNum,
-        tenantId: tenantId || undefined,
-        assignedTo: assignedTo || undefined,
-        createdDateStart: createdDateStart || undefined,
-        createdDateEnd: createdDateEnd || undefined,
-        resolvedDateStart: resolvedDateStart || undefined,
-        resolvedDateEnd: resolvedDateEnd || undefined
-      };
+    // Validate and build filter object with enhanced validation
+    try {
+      const severityValues = ['informational', 'low', 'medium', 'high', 'critical'];
+      const statusValues = ['new', 'inProgress', 'resolved'];
+      const categoryValues = [
+        'InitialAccess', 'Execution', 'Persistence', 'PrivilegeEscalation',
+        'DefenseEvasion', 'CredentialAccess', 'Discovery', 'LateralMovement',
+        'Collection', 'Exfiltration', 'CommandAndControl', 'Impact'
+      ];
+
+      if (
+        severity ||
+        status ||
+        category ||
+        classification ||
+        productName ||
+        detectionSource ||
+        serviceSource ||
+        incidentId ||
+        tenantId ||
+        assignedTo ||
+        createdDateStart ||
+        createdDateEnd ||
+        resolvedDateStart ||
+        resolvedDateEnd
+      ) {
+        queryParams.filter = {
+          severity: validateFilterArray(severity, 'severity', severityValues),
+          status: validateFilterArray(status, 'status', statusValues),
+          category: validateFilterArray(category, 'category', categoryValues),
+          classification: validateFilterArray(classification, 'classification', undefined, 5),
+          productName: validateFilterArray(productName, 'productName', undefined, 10, 100),
+          detectionSource: validateFilterArray(detectionSource, 'detectionSource', undefined, 10, 100),
+          serviceSource: validateFilterArray(serviceSource, 'serviceSource', undefined, 10, 100),
+          incidentId: incidentIdNum,
+          tenantId: tenantId || undefined,
+          assignedTo: assignedTo || undefined,
+          createdDateStart: createdDateStart || undefined,
+          createdDateEnd: createdDateEnd || undefined,
+          resolvedDateStart: resolvedDateStart || undefined,
+          resolvedDateEnd: resolvedDateEnd || undefined
+        };
+      }
+    } catch (error) {
+      throw new ValidationError((error as Error).message);
     }
 
     logger.info('Request validation successful', { queryParams });

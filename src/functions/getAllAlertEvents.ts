@@ -8,6 +8,7 @@ import { alertEventService } from '../services/AlertEventService';
 import { handleError, successResponse, ValidationError } from '../utils/errorHandler';
 import { logger } from '../utils/logger';
 import { validateFunctionKey } from '../middleware/authentication';
+import { checkRateLimit, createRateLimitResponse, RATE_LIMITS } from '../middleware/rateLimit';
 import { validateAlertFilters, validatePaginationParams } from '../utils/validator';
 
 async function getAllAlertEvents(
@@ -44,6 +45,12 @@ async function getAllAlertEvents(
     }
 
     logger.info('Authentication successful', { userId: authResult.userId });
+
+    // Rate limiting check
+    const rateLimitResult = checkRateLimit(request, 'getAll', RATE_LIMITS.getAll);
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(rateLimitResult);
+    }
 
     // Parse and validate pagination parameters
     const pageSize = request.query.get('pageSize');
