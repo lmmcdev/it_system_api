@@ -49,3 +49,12 @@ temp/
 
 # Operating System
 Thumbs.db
+.env.example
+__azurite_db_blob__.json
+__azurite_db_blob_extent__.json
+__azurite_db_queue__.json
+__azurite_db_queue_extent__.json
+__azurite_db_table__.json
+__blobstorage__/04363f49-d13f-4ae5-ac3d-a024865e5ddc
+AzuriteConfig
+nul
