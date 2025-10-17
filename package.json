@@ -1,0 +1,36 @@
+{
+  "name": "it-system-api",
+  "version": "1.0.0",
+  "description": "Azure Functions API for IT System management with CosmosDB and Cognitive Search",
+  "main": "dist/src/functions/**/*.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean",
+    "start": "func start",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix"
+  },
+  "dependencies": {
+    "@azure/cosmos": "^4.0.0",
+    "@azure/functions": "^4.5.0",
+    "@azure/search-documents": "^12.2.0",
+    "dotenv": "^16.4.5",
+    "swagger-ui-dist": "^5.29.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.21",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "azure-functions-core-tools": "^4.0.5455",
+    "eslint": "^8.56.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
