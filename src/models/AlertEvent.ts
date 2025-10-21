@@ -83,17 +83,47 @@ export interface CloudLogonRequestEvidence extends BaseEvidence {
 }
 
 /**
- * Alert evidence union type
+ * Mailbox evidence
  */
-export type AlertEvidence = UserEvidence | CloudLogonSessionEvidence | IpEvidence | CloudLogonRequestEvidence;
+export interface MailboxEvidence extends BaseEvidence {
+  primaryAddress: string;
+  displayName: string;
+  senderIp?: string;
+}
 
 /**
- * Main Alert Event entity (matches CosmosDB document structure)
- * Properties are at root level, not nested under "value"
+ * URL evidence
  */
-export interface AlertEvent {
-  // CosmosDB document ID (partition key)
-  id: string;
+export interface UrlEvidence extends BaseEvidence {
+  url: string;
+}
+
+/**
+ * Domain evidence
+ */
+export interface DomainEvidence extends BaseEvidence {
+  domain: string;
+}
+
+/**
+ * Alert evidence union type
+ */
+export type AlertEvidence =
+  | UserEvidence
+  | CloudLogonSessionEvidence
+  | IpEvidence
+  | CloudLogonRequestEvidence
+  | MailboxEvidence
+  | UrlEvidence
+  | DomainEvidence;
+
+/**
+ * Microsoft Graph Alert v2 data structure
+ * Contains the actual alert data from Microsoft Graph Security API
+ */
+export interface AlertEventGraphData {
+  // Microsoft Graph Alert ID (different from CosmosDB document ID)
+  id?: string;
 
   // Microsoft Graph Alert properties
   alertId?: string;
@@ -123,8 +153,31 @@ export interface AlertEvent {
   systemTags?: unknown[];
   tenantId?: string;
   title: string;
+  threatFamilyName?: string;
+  networkConnections?: Array<{
+    destinationAddress?: string;
+    destinationDomain?: string;
+    destinationPort?: number;
+    lastExternalIpAddress?: string;
+    protocol?: string;
+  }>;
+}
 
-  // CosmosDB metadata
+/**
+ * CosmosDB Alert Event Document structure
+ * This is the ACTUAL structure stored in CosmosDB with nested Microsoft Graph data
+ *
+ * IMPORTANT: All Microsoft Graph alert data is nested under the 'value' property.
+ * This structure separates CosmosDB metadata from the Graph API payload.
+ */
+export interface AlertEventDocument {
+  // CosmosDB document ID (partition key)
+  id: string;
+
+  // Microsoft Graph Alert data (NESTED under 'value')
+  value?: AlertEventGraphData;
+
+  // CosmosDB system metadata
   _rid?: string;
   _self?: string;
   _etag?: string;
@@ -133,9 +186,11 @@ export interface AlertEvent {
 }
 
 /**
- * CosmosDB document type alias (same as AlertEvent)
+ * @deprecated Use AlertEventDocument or AlertEventGraphData instead
+ * Legacy alias for backward compatibility during migration
+ * Will be removed after all code is updated to use nested structure
  */
-export type AlertEventDocument = AlertEvent;
+export type AlertEvent = AlertEventDocument;
 
 /**
  * Alert severity levels (Microsoft Graph Security API standard values)

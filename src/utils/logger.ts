@@ -83,7 +83,7 @@ class Logger {
       logEntry.error = error;
     }
 
-    const logMessage = JSON.stringify(logEntry, this.errorReplacer);
+    const logMessage = JSON.stringify(logEntry, this.errorReplacer.bind(this));
 
     switch (level) {
       case LogLevel.DEBUG:
