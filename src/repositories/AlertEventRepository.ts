@@ -242,29 +242,30 @@ export class AlertEventRepository {
       const conditions: string[] = [];
       const parameters: { name: string; value: string }[] = [];
 
-      // Build parameterized query to prevent SQL injection (using nested structure: c.value.*)
+      // Build parameterized query to prevent SQL injection
+      // NOTE: Documents use nested structure with all fields under c["value"]["fieldName"]
       if (filter?.severity) {
-        conditions.push('c.value.severity = @severity');
+        conditions.push('c["value"]["severity"] = @severity');
         parameters.push({ name: '@severity', value: filter.severity });
       }
 
       if (filter?.status) {
-        conditions.push('c.value.status = @status');
+        conditions.push('c["value"]["status"] = @status');
         parameters.push({ name: '@status', value: filter.status });
       }
 
       if (filter?.category) {
-        conditions.push('c.value.category = @category');
+        conditions.push('c["value"]["category"] = @category');
         parameters.push({ name: '@category', value: filter.category });
       }
 
       if (filter?.startDate) {
-        conditions.push('c.value.createdDateTime >= @startDate');
+        conditions.push('c["value"]["createdDateTime"] >= @startDate');
         parameters.push({ name: '@startDate', value: filter.startDate });
       }
 
       if (filter?.endDate) {
-        conditions.push('c.value.createdDateTime <= @endDate');
+        conditions.push('c["value"]["createdDateTime"] <= @endDate');
         parameters.push({ name: '@endDate', value: filter.endDate });
       }
 
@@ -278,7 +279,7 @@ export class AlertEventRepository {
       // NOTE: ORDER BY commented out due to missing composite index
       // To re-enable: Create composite index in Azure Portal:
       // Path: /value/createdDateTime (DESC)
-      // query += ' ORDER BY c.value.createdDateTime DESC';
+      // query += ' ORDER BY c["value"]["createdDateTime"] DESC';
 
       logger.info('[CosmosDB] Executing query with pagination', {
         filter,
@@ -417,10 +418,27 @@ export class AlertEventRepository {
 
   /**
    * Map CosmosDB document to AlertEvent model
-   * Documents are returned as-is since structure matches the AlertEvent interface
+   * CosmosDB documents have a nested structure where all fields are under "value" property
+   * We need to extract and flatten the structure for the API response
    */
-  private mapToAlertEvent(doc: AlertEventDocument): AlertEvent {
-    return doc;
+  private mapToAlertEvent(doc: any): AlertEvent {
+    // Documents are stored with nested structure: { id, value: { ...fields }, _rid, _etag, _ts }
+    // Extract the value object and merge with document-level metadata
+    const value = doc.value || {};
+
+    const result: any = {
+      id: doc.id,
+      ...value
+    };
+
+    // Preserve CosmosDB metadata only if present (avoid adding undefined fields)
+    if (doc._rid !== undefined) result._rid = doc._rid;
+    if (doc._self !== undefined) result._self = doc._self;
+    if (doc._etag !== undefined) result._etag = doc._etag;
+    if (doc._attachments !== undefined) result._attachments = doc._attachments;
+    if (doc._ts !== undefined) result._ts = doc._ts;
+
+    return result as AlertEvent;
   }
 }
 

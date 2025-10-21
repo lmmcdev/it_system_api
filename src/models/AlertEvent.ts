@@ -1,6 +1,30 @@
 /**
  * Alert Event entity model
  * Represents a security alert event from Microsoft Graph Security API stored in CosmosDB
+ *
+ * CosmosDB Storage Structure:
+ * Documents are stored with nested structure where all Microsoft Graph alert data
+ * is nested under the "value" property:
+ *
+ * {
+ *   id: "uuid-123",                    // CosmosDB document ID (partition key)
+ *   value: {                            // Microsoft Graph Alert data (nested)
+ *     severity: "high",
+ *     status: "new",
+ *     category: "InitialAccess",
+ *     createdDateTime: "2025-10-15T10:00:00Z",
+ *     title: "...",
+ *     description: "...",
+ *     // ... all other alert fields
+ *   },
+ *   _rid: "...",                        // CosmosDB metadata
+ *   _etag: "...",
+ *   _ts: 1234567890
+ * }
+ *
+ * API Response:
+ * The API flattens this structure, returning properties at root level for easier consumption.
+ * Repository layer handles the mapping from nested storage to flat response.
  */
 
 /**
@@ -164,7 +188,43 @@ export interface AlertEventGraphData {
 }
 
 /**
- * CosmosDB Alert Event Document structure
+ * Main Alert Event entity (API Response Structure)
+ *
+ * IMPORTANT: CosmosDB Storage Structure vs API Response
+ * -------------------------------------------------------
+ * CosmosDB documents have a NESTED structure where all Microsoft Graph alert data
+ * is stored under a "value" property:
+ * {
+ *   "id": "uuid-123",
+ *   "value": {
+ *     "severity": "high",
+ *     "status": "new",
+ *     "category": "InitialAccess",
+ *     "createdDateTime": "2025-10-15T10:00:00Z",
+ *     ... (all other alert fields)
+ *   },
+ *   "_rid": "...",
+ *   "_etag": "...",
+ *   "_ts": 1234567890
+ * }
+ *
+ * This interface represents the FLATTENED structure returned by the API.
+ * The repository layer handles mapping from the nested CosmosDB structure to this flat structure.
+ */
+export interface AlertEvent extends AlertEventGraphData {
+  // CosmosDB document ID (partition key)
+  id: string;
+
+  // CosmosDB metadata (optional, may not be present in all responses)
+  _rid?: string;
+  _self?: string;
+  _etag?: string;
+  _attachments?: string;
+  _ts?: number;
+}
+
+/**
+ * CosmosDB Alert Event Document structure (Internal Storage)
  * This is the ACTUAL structure stored in CosmosDB with nested Microsoft Graph data
  *
  * IMPORTANT: All Microsoft Graph alert data is nested under the 'value' property.
@@ -184,13 +244,6 @@ export interface AlertEventDocument {
   _attachments?: string;
   _ts?: number;
 }
-
-/**
- * @deprecated Use AlertEventDocument or AlertEventGraphData instead
- * Legacy alias for backward compatibility during migration
- * Will be removed after all code is updated to use nested structure
- */
-export type AlertEvent = AlertEventDocument;
 
 /**
  * Alert severity levels (Microsoft Graph Security API standard values)
