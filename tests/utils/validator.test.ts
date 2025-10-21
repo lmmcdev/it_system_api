@@ -376,7 +376,7 @@ describe('Validator Utilities', () => {
     it('should accept valid riskState filter', () => {
       const result = validateRiskFilters({ riskState: 'atRisk' });
       expect(result.valid).toBe(true);
-      expect(result.sanitized?.riskState).toBe('atRisk');
+      expect(result.sanitized?.riskState).toBe('atrisk'); // Normalized to lowercase
     });
 
     it('should accept all valid riskState values', () => {
@@ -390,10 +390,20 @@ describe('Validator Utilities', () => {
         'unknownFutureValue'
       ];
 
-      for (const state of validStates) {
-        const result = validateRiskFilters({ riskState: state });
+      const expectedLowercase = [
+        'none',
+        'confirmedsafe',
+        'remediated',
+        'dismissed',
+        'atrisk',
+        'confirmedcompromised',
+        'unknownfuturevalue'
+      ];
+
+      for (let i = 0; i < validStates.length; i++) {
+        const result = validateRiskFilters({ riskState: validStates[i] });
         expect(result.valid).toBe(true);
-        expect(result.sanitized?.riskState).toBe(state);
+        expect(result.sanitized?.riskState).toBe(expectedLowercase[i]); // Normalized to lowercase
       }
     });
 
@@ -432,10 +442,16 @@ describe('Validator Utilities', () => {
       expect(result.errors).toBeDefined();
     });
 
-    it('should accept valid startDate filter', () => {
+    it('should accept valid startDate filter in ISO 8601 format', () => {
       const result = validateRiskFilters({ startDate: '2025-10-20T10:00:00Z' });
       expect(result.valid).toBe(true);
       expect(result.sanitized?.startDate).toBe('2025-10-20T10:00:00Z');
+    });
+
+    it('should accept valid startDate filter in YYYY-MM-DD format', () => {
+      const result = validateRiskFilters({ startDate: '2025-10-20' });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized?.startDate).toBe('2025-10-20');
     });
 
     it('should reject invalid startDate format', () => {
@@ -445,10 +461,16 @@ describe('Validator Utilities', () => {
       expect(result.errors?.[0]).toContain('startDate');
     });
 
-    it('should accept valid endDate filter', () => {
+    it('should accept valid endDate filter in ISO 8601 format', () => {
       const result = validateRiskFilters({ endDate: '2025-10-31T23:59:59Z' });
       expect(result.valid).toBe(true);
       expect(result.sanitized?.endDate).toBe('2025-10-31T23:59:59Z');
+    });
+
+    it('should accept valid endDate filter in YYYY-MM-DD format', () => {
+      const result = validateRiskFilters({ endDate: '2025-10-31' });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized?.endDate).toBe('2025-10-31');
     });
 
     it('should reject invalid endDate format', () => {
@@ -478,7 +500,7 @@ describe('Validator Utilities', () => {
       });
       expect(result.valid).toBe(true);
       expect(result.sanitized?.riskLevel).toBe('high');
-      expect(result.sanitized?.riskState).toBe('atRisk');
+      expect(result.sanitized?.riskState).toBe('atrisk'); // Normalized to lowercase
       expect(result.sanitized?.userId).toBe('user@example.com');
       expect(result.sanitized?.startDate).toBe('2025-10-01T00:00:00Z');
       expect(result.sanitized?.endDate).toBe('2025-10-31T23:59:59Z');
@@ -522,6 +544,49 @@ describe('Validator Utilities', () => {
       const result = validateRiskFilters({ userId: longUserId });
       expect(result.valid).toBe(false);
       expect(result.errors).toBeDefined();
+    });
+
+    describe('Bug Fix Verification - YYYY-MM-DD Support', () => {
+      it('should fix the bug: accept startDate in YYYY-MM-DD format', () => {
+        const result = validateRiskFilters({
+          startDate: '2025-10-14',
+          endDate: '2025-10-16'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.errors).toBeUndefined();
+        expect(result.sanitized?.startDate).toBe('2025-10-14');
+        expect(result.sanitized?.endDate).toBe('2025-10-16');
+      });
+
+      it('should accept mixed formats (YYYY-MM-DD and ISO 8601)', () => {
+        const result = validateRiskFilters({
+          startDate: '2025-10-14',
+          endDate: '2025-10-16T23:59:59Z'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.startDate).toBe('2025-10-14');
+        expect(result.sanitized?.endDate).toBe('2025-10-16T23:59:59Z');
+      });
+
+      it('should validate date range with YYYY-MM-DD format', () => {
+        const result = validateRiskFilters({
+          startDate: '2025-10-16',
+          endDate: '2025-10-14'
+        });
+        expect(result.valid).toBe(false);
+        expect(result.errors).toBeDefined();
+        expect(result.errors?.[0]).toContain('startDate must be before');
+      });
+
+      it('should allow same day in YYYY-MM-DD format', () => {
+        const result = validateRiskFilters({
+          startDate: '2025-10-14',
+          endDate: '2025-10-14'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.startDate).toBe('2025-10-14');
+        expect(result.sanitized?.endDate).toBe('2025-10-14');
+      });
     });
   });
 

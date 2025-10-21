@@ -571,18 +571,19 @@ export function validateRiskFilters(filters: {
     } else if (riskStateResult.value) {
       const allowedRiskStates = [
         'none',
-        'confirmedSafe',
+        'confirmedsafe',
         'remediated',
         'dismissed',
-        'atRisk',
-        'confirmedCompromised',
-        'unknownFutureValue'
+        'atrisk',
+        'confirmedcompromised',
+        'unknownfuturevalue'
       ];
 
-      if (!allowedRiskStates.includes(riskStateResult.value)) {
+      // Normalize to lowercase for consistent comparison (same as riskLevel)
+      if (!allowedRiskStates.includes(riskStateResult.value.toLowerCase())) {
         errors.push(`riskState: Must be one of ${allowedRiskStates.join(', ')}`);
       } else {
-        sanitized.riskState = riskStateResult.value;
+        sanitized.riskState = riskStateResult.value.toLowerCase();
       }
     }
   }
@@ -602,23 +603,39 @@ export function validateRiskFilters(filters: {
     }
   }
 
-  // Validate startDate
+  // Validate startDate - accepts both YYYY-MM-DD and ISO 8601 formats
   if (filters.startDate) {
-    const dateResult = validateISODate(filters.startDate);
-    if (!dateResult.valid) {
-      errors.push(`startDate: ${dateResult.error}`);
-    } else {
+    // Try YYYY-MM-DD format first (user-friendly)
+    const simpleDateResult = validateDateString(filters.startDate, { allowFuture: true });
+    if (simpleDateResult.valid) {
+      // Keep original format (YYYY-MM-DD)
       sanitized.startDate = filters.startDate;
+    } else {
+      // Fall back to ISO 8601 format for backward compatibility
+      const isoDateResult = validateISODate(filters.startDate);
+      if (isoDateResult.valid) {
+        sanitized.startDate = filters.startDate;
+      } else {
+        errors.push(`startDate: Must be in YYYY-MM-DD format (e.g., 2025-10-21) or ISO 8601 format`);
+      }
     }
   }
 
-  // Validate endDate
+  // Validate endDate - accepts both YYYY-MM-DD and ISO 8601 formats
   if (filters.endDate) {
-    const dateResult = validateISODate(filters.endDate);
-    if (!dateResult.valid) {
-      errors.push(`endDate: ${dateResult.error}`);
-    } else {
+    // Try YYYY-MM-DD format first (user-friendly)
+    const simpleDateResult = validateDateString(filters.endDate, { allowFuture: true });
+    if (simpleDateResult.valid) {
+      // Keep original format (YYYY-MM-DD)
       sanitized.endDate = filters.endDate;
+    } else {
+      // Fall back to ISO 8601 format for backward compatibility
+      const isoDateResult = validateISODate(filters.endDate);
+      if (isoDateResult.valid) {
+        sanitized.endDate = filters.endDate;
+      } else {
+        errors.push(`endDate: Must be in YYYY-MM-DD format (e.g., 2025-10-21) or ISO 8601 format`);
+      }
     }
   }
 

@@ -17,8 +17,27 @@ export interface RiskLocation {
 }
 
 /**
- * Main Risk Detection Event entity (matches CosmosDB document structure)
- * Properties are at root level, not nested under "value"
+ * Main Risk Detection Event entity
+ *
+ * IMPORTANT: CosmosDB Storage Structure vs API Response
+ * -------------------------------------------------------
+ * CosmosDB documents have a NESTED structure where all fields are under a "value" property:
+ * {
+ *   "id": "uuid",
+ *   "value": {
+ *     "riskLevel": "low",
+ *     "riskState": "remediated",
+ *     "userId": "...",
+ *     "detectedDateTime": "...",
+ *     ... (all other fields)
+ *   },
+ *   "_rid": "...",
+ *   "_etag": "...",
+ *   "_ts": 1760538724
+ * }
+ *
+ * This interface represents the FLATTENED structure returned by the API.
+ * The repository layer handles mapping from the nested CosmosDB structure to this flat structure.
  */
 export interface RiskDetectionEvent {
   // CosmosDB document ID (partition key)

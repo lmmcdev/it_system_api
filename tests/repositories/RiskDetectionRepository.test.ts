@@ -52,6 +52,7 @@ jest.mock('../../src/config/environment', () => ({
 describe('RiskDetectionRepository', () => {
   let repository: RiskDetectionRepository;
 
+  // API response structure (flattened, includes metadata from CosmosDB)
   const mockRiskDetectionEvent: RiskDetectionEvent = {
     id: '550e8400-e29b-41d4-a716-446655440000',
     userId: 'user@example.com',
@@ -76,7 +77,43 @@ describe('RiskDetectionRepository', () => {
     ipAddress: '192.168.1.1',
     source: 'AzureADIdentityProtection',
     requestId: 'req-123',
-    correlationId: 'corr-456'
+    correlationId: 'corr-456',
+    _rid: 'test-rid',
+    _etag: '"test-etag"',
+    _ts: 1729425600
+  };
+
+  // CosmosDB document structure (nested under "value")
+  const mockCosmosDocument = {
+    id: '550e8400-e29b-41d4-a716-446655440000',
+    value: {
+      userId: 'user@example.com',
+      userDisplayName: 'Test User',
+      userPrincipalName: 'user@example.com',
+      riskType: 'unlikelyTravel',
+      riskLevel: 'high',
+      riskState: 'atRisk',
+      riskDetail: 'User login from unusual location',
+      detectedDateTime: '2025-10-20T10:00:00Z',
+      lastUpdatedDateTime: '2025-10-20T12:00:00Z',
+      activity: 'signin',
+      location: {
+        city: 'New York',
+        state: 'NY',
+        countryOrRegion: 'US',
+        geoCoordinates: {
+          latitude: 40.7128,
+          longitude: -74.0060
+        }
+      },
+      ipAddress: '192.168.1.1',
+      source: 'AzureADIdentityProtection',
+      requestId: 'req-123',
+      correlationId: 'corr-456'
+    },
+    _rid: 'test-rid',
+    _etag: '"test-etag"',
+    _ts: 1729425600
   };
 
   beforeEach(() => {
@@ -87,7 +124,7 @@ describe('RiskDetectionRepository', () => {
   describe('getById', () => {
     it('should fetch risk detection event by ID successfully', async () => {
       (mockRead as any).mockResolvedValue({
-        resource: mockRiskDetectionEvent,
+        resource: mockCosmosDocument,
         requestCharge: 1.0
       });
 
@@ -139,7 +176,7 @@ describe('RiskDetectionRepository', () => {
 
   describe('getAll', () => {
     const mockPaginatedResponse = {
-      resources: [mockRiskDetectionEvent],
+      resources: [mockCosmosDocument],
       hasMoreResults: false,
       continuationToken: undefined,
       requestCharge: 2.5
@@ -170,7 +207,7 @@ describe('RiskDetectionRepository', () => {
       expect(result.items).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.objectContaining({
-          query: expect.stringContaining('c.riskLevel = @riskLevel'),
+          query: expect.stringContaining('c["value"]["riskLevel"] = @riskLevel'),
           parameters: expect.arrayContaining([{ name: '@riskLevel', value: 'high' }])
         }),
         expect.any(Object)
@@ -185,6 +222,7 @@ describe('RiskDetectionRepository', () => {
       expect(result.items).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.objectContaining({
+          query: expect.stringContaining('c["value"]["riskState"] = @riskState'),
           parameters: expect.arrayContaining([{ name: '@riskState', value: 'atRisk' }])
         }),
         expect.any(Object)
@@ -199,6 +237,7 @@ describe('RiskDetectionRepository', () => {
       expect(result.items).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.objectContaining({
+          query: expect.stringContaining('c["value"]["userId"] = @userId'),
           parameters: expect.arrayContaining([{ name: '@userId', value: 'user@example.com' }])
         }),
         expect.any(Object)
@@ -216,6 +255,7 @@ describe('RiskDetectionRepository', () => {
       expect(result.items).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.objectContaining({
+          query: expect.stringContaining('c["value"]["detectedDateTime"] >= @startDate'),
           parameters: expect.arrayContaining([
             { name: '@startDate', value: '2025-10-01T00:00:00Z' },
             { name: '@endDate', value: '2025-10-31T23:59:59Z' }
@@ -271,7 +311,7 @@ describe('RiskDetectionRepository', () => {
     });
 
     it('should throw ValidationError for invalid endDate', async () => {
-      await expect(repository.getAll({ endDate: '2025/10/31' })).rejects.toThrow(ValidationError);
+      await expect(repository.getAll({ endDate: 'not-a-date' })).rejects.toThrow(ValidationError);
     });
 
     it('should throw ConflictError on 409 error', async () => {
@@ -291,13 +331,52 @@ describe('RiskDetectionRepository', () => {
 
       await expect(repository.getAll()).rejects.toThrow(ServiceError);
     });
+
+    it('should use nested field path in ORDER BY clause', async () => {
+      (mockFetchNext as any).mockResolvedValue(mockPaginatedResponse);
+
+      await repository.getAll();
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: expect.stringContaining('ORDER BY c["value"]["detectedDateTime"] DESC')
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should build correct query with multiple filters using nested paths', async () => {
+      (mockFetchNext as any).mockResolvedValue(mockPaginatedResponse);
+
+      await repository.getAll({
+        riskLevel: 'high',
+        riskState: 'atRisk',
+        userId: 'user@example.com',
+        startDate: '2025-10-01T00:00:00Z',
+        endDate: '2025-10-31T23:59:59Z'
+      });
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: expect.stringContaining('c["value"]["riskLevel"]'),
+          parameters: expect.arrayContaining([
+            { name: '@riskLevel', value: 'high' },
+            { name: '@riskState', value: 'atRisk' },
+            { name: '@userId', value: 'user@example.com' },
+            { name: '@startDate', value: '2025-10-01T00:00:00Z' },
+            { name: '@endDate', value: '2025-10-31T23:59:59Z' }
+          ])
+        }),
+        expect.any(Object)
+      );
+    });
   });
 
   describe('getByRiskLevel', () => {
     it('should call getAll with riskLevel filter', async () => {
       (mockQuery as any).mockReturnValue({ fetchNext: mockFetchNext });
       (mockFetchNext as any).mockResolvedValue({
-        resources: [mockRiskDetectionEvent],
+        resources: [mockCosmosDocument],
         hasMoreResults: false,
         requestCharge: 2.0
       });
@@ -312,7 +391,7 @@ describe('RiskDetectionRepository', () => {
     it('should call getAll with riskState filter', async () => {
       (mockQuery as any).mockReturnValue({ fetchNext: mockFetchNext });
       (mockFetchNext as any).mockResolvedValue({
-        resources: [mockRiskDetectionEvent],
+        resources: [mockCosmosDocument],
         hasMoreResults: false,
         requestCharge: 2.0
       });
@@ -327,7 +406,7 @@ describe('RiskDetectionRepository', () => {
     it('should call getAll with userId filter', async () => {
       (mockQuery as any).mockReturnValue({ fetchNext: mockFetchNext });
       (mockFetchNext as any).mockResolvedValue({
-        resources: [mockRiskDetectionEvent],
+        resources: [mockCosmosDocument],
         hasMoreResults: false,
         requestCharge: 2.0
       });
@@ -342,7 +421,7 @@ describe('RiskDetectionRepository', () => {
     it('should call getAll with date range filter', async () => {
       (mockQuery as any).mockReturnValue({ fetchNext: mockFetchNext });
       (mockFetchNext as any).mockResolvedValue({
-        resources: [mockRiskDetectionEvent],
+        resources: [mockCosmosDocument],
         hasMoreResults: false,
         requestCharge: 2.0
       });
@@ -359,7 +438,7 @@ describe('RiskDetectionRepository', () => {
   describe('exists', () => {
     it('should return true when risk detection event exists', async () => {
       (mockRead as any).mockResolvedValue({
-        resource: mockRiskDetectionEvent,
+        resource: mockCosmosDocument,
         requestCharge: 1.0
       });
 

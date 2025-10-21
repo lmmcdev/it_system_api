@@ -9,7 +9,6 @@ import { PaginatedResponse as AlertPaginatedResponse } from './AlertEventReposit
 import { config } from '../config/environment';
 import { logger } from '../utils/logger';
 import { NotFoundError, ServiceError, ValidationError, ConflictError } from '../utils/errorHandler';
-import { validateISODate } from '../utils/validator';
 
 /**
  * Re-export PaginatedResponse for convenience
@@ -213,23 +212,17 @@ export class RiskDetectionRepository {
         );
       }
 
-      // Validate date formats (ISO 8601)
-      if (filter?.startDate) {
-        const startDateValidation = validateISODate(filter.startDate);
-        if (!startDateValidation.valid) {
-          throw new ValidationError(
-            `Invalid startDate format: ${filter.startDate}. ${startDateValidation.error}`
-          );
-        }
+      // Validate date formats (accepts both YYYY-MM-DD and ISO 8601)
+      if (filter?.startDate && isNaN(Date.parse(filter.startDate))) {
+        throw new ValidationError(
+          `Invalid startDate format: ${filter.startDate}. Must be a valid date string (YYYY-MM-DD or ISO 8601)`
+        );
       }
 
-      if (filter?.endDate) {
-        const endDateValidation = validateISODate(filter.endDate);
-        if (!endDateValidation.valid) {
-          throw new ValidationError(
-            `Invalid endDate format: ${filter.endDate}. ${endDateValidation.error}`
-          );
-        }
+      if (filter?.endDate && isNaN(Date.parse(filter.endDate))) {
+        throw new ValidationError(
+          `Invalid endDate format: ${filter.endDate}. Must be a valid date string (YYYY-MM-DD or ISO 8601)`
+        );
       }
 
       const container = await this.getContainer();
@@ -242,28 +235,29 @@ export class RiskDetectionRepository {
       const parameters: { name: string; value: string }[] = [];
 
       // Build parameterized query to prevent SQL injection
+      // NOTE: Documents use nested structure with all fields under c["value"]["fieldName"]
       if (filter?.riskLevel) {
-        conditions.push('c.riskLevel = @riskLevel');
+        conditions.push('c["value"]["riskLevel"] = @riskLevel');
         parameters.push({ name: '@riskLevel', value: filter.riskLevel });
       }
 
       if (filter?.riskState) {
-        conditions.push('c.riskState = @riskState');
+        conditions.push('c["value"]["riskState"] = @riskState');
         parameters.push({ name: '@riskState', value: filter.riskState });
       }
 
       if (filter?.userId) {
-        conditions.push('c.userId = @userId');
+        conditions.push('c["value"]["userId"] = @userId');
         parameters.push({ name: '@userId', value: filter.userId });
       }
 
       if (filter?.startDate) {
-        conditions.push('c.detectedDateTime >= @startDate');
+        conditions.push('c["value"]["detectedDateTime"] >= @startDate');
         parameters.push({ name: '@startDate', value: filter.startDate });
       }
 
       if (filter?.endDate) {
-        conditions.push('c.detectedDateTime <= @endDate');
+        conditions.push('c["value"]["detectedDateTime"] <= @endDate');
         parameters.push({ name: '@endDate', value: filter.endDate });
       }
 
@@ -272,7 +266,7 @@ export class RiskDetectionRepository {
       }
 
       // Order by detected date descending (most recent first)
-      query += ' ORDER BY c.detectedDateTime DESC';
+      query += ' ORDER BY c["value"]["detectedDateTime"] DESC';
 
       logger.info('[CosmosDB] Executing risk detection query with pagination', {
         filter,
@@ -411,10 +405,27 @@ export class RiskDetectionRepository {
 
   /**
    * Map CosmosDB document to RiskDetectionEvent model
-   * Documents are returned as-is since structure matches the RiskDetectionEvent interface
+   * CosmosDB documents have a nested structure where all fields are under "value" property
+   * We need to extract and flatten the structure for the API response
    */
-  private mapToRiskDetectionEvent(doc: RiskDetectionEventDocument): RiskDetectionEvent {
-    return doc;
+  private mapToRiskDetectionEvent(doc: any): RiskDetectionEvent {
+    // Documents are stored with nested structure: { id, value: { ...fields }, _rid, _etag, _ts }
+    // Extract the value object and merge with document-level metadata
+    const value = doc.value || {};
+
+    const result: any = {
+      id: doc.id,
+      ...value
+    };
+
+    // Preserve CosmosDB metadata only if present (avoid adding undefined fields)
+    if (doc._rid !== undefined) result._rid = doc._rid;
+    if (doc._self !== undefined) result._self = doc._self;
+    if (doc._etag !== undefined) result._etag = doc._etag;
+    if (doc._attachments !== undefined) result._attachments = doc._attachments;
+    if (doc._ts !== undefined) result._ts = doc._ts;
+
+    return result as RiskDetectionEvent;
   }
 }
 
