@@ -102,9 +102,9 @@ export interface AttackTypeStatistics {
  */
 export interface AlertStatisticsDocument {
   // CosmosDB document ID
-  // Format: "{type}_{periodStartDate}_{periodEndDate}_{timestamp}"
-  // Example: "detectionSource_2025-10-20_2025-10-20_2025-10-20T17-30-45-123"
-  // Timestamp ensures unique IDs for historical tracking
+  // Format: "{type}_{YYYY-MM-DD}"
+  // Example: "detectionSource_2025-10-20"
+  // One document per day per type - UPSERT pattern ensures no duplicates
   id: string;
 
   // Partition key for efficient querying

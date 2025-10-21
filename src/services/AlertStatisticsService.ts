@@ -17,7 +17,12 @@ import {
 import { AlertEventDocument, AlertEvidence } from '../models/AlertEvent';
 import { config } from '../config/environment';
 import { logger } from '../utils/logger';
-import { ServiceError } from '../utils/errorHandler';
+import { ServiceError, ValidationError } from '../utils/errorHandler';
+import { validateISODate } from '../utils/validator';
+
+// Constants for date format validation
+const DATE_FORMAT_LENGTH = 10; // YYYY-MM-DD
+const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Aggregation result with processing metadata
@@ -83,6 +88,30 @@ export class AlertStatisticsService {
   ): Promise<AggregationResult> {
     const startTime = Date.now();
 
+    // SECURITY: Validate type is a known enum value (runtime validation)
+    if (!Object.values(StatisticsType).includes(type)) {
+      logger.error('[AlertStatisticsService] Invalid statistics type attempted', new Error(), { type });
+      throw new ValidationError('Invalid statistics type provided');
+    }
+
+    // SECURITY: Validate period.startDate format before using for ID generation
+    if (!period.startDate || typeof period.startDate !== 'string') {
+      throw new ValidationError('period.startDate is required and must be a string');
+    }
+
+    const startDateValidation = validateISODate(period.startDate);
+    if (!startDateValidation.valid) {
+      throw new ValidationError(`Invalid period startDate: ${startDateValidation.error}`);
+    }
+
+    // SECURITY: Validate period.endDate if provided
+    if (period.endDate) {
+      const endDateValidation = validateISODate(period.endDate);
+      if (!endDateValidation.valid) {
+        throw new ValidationError(`Invalid period endDate: ${endDateValidation.error}`);
+      }
+    }
+
     logger.info('[AlertStatisticsService] Generating statistics', { type, period, isInitialRun });
 
     try {
@@ -132,16 +161,30 @@ export class AlertStatisticsService {
         ? alerts[alerts.length - 1].value?.createdDateTime
         : undefined;
 
-      // Generate timestamp for unique ID (historical tracking)
+      // Generate timestamp for tracking
       const generatedAt = new Date().toISOString();
-      const timestamp = generatedAt.replace(/[:.]/g, '-').replace('Z', '');
+
+      // SECURITY: Extract and validate periodStartDate for ID and partition key
+      const periodStartDate = period.startDate.substring(0, DATE_FORMAT_LENGTH);
+
+      // Validate extracted date format (YYYY-MM-DD)
+      if (!DATE_FORMAT_REGEX.test(periodStartDate)) {
+        throw new ValidationError(`Invalid date format for partition key: ${periodStartDate}`);
+      }
+
+      // Validate the extracted date is actually a valid date
+      const dateCheck = new Date(periodStartDate + 'T00:00:00.000Z');
+      if (isNaN(dateCheck.getTime())) {
+        throw new ValidationError(`Extracted periodStartDate is not a valid date: ${periodStartDate}`);
+      }
 
       // Build the complete statistics document
-      // ID format: {type}_{periodStart}_{periodEnd}_{timestamp}
-      // Example: detectionSource_2025-10-20_2025-10-20_2025-10-20T17-30-45-123
+      // ID format: {type}_{YYYY-MM-DD}
+      // Example: detectionSource_2025-10-20
+      // This enables daily UPSERT - same ID per day gets updated, not duplicated
       const statisticsDoc: AlertStatisticsDocument = {
-        id: `${type}_${period.startDate.substring(0, 10)}_${period.endDate.substring(0, 10)}_${timestamp}`,
-        periodStartDate: period.startDate.substring(0, 10), // YYYY-MM-DD format for partition key
+        id: `${type}_${periodStartDate}`,
+        periodStartDate: periodStartDate, // YYYY-MM-DD format for partition key
         type,
         period,
         generatedAt,
@@ -154,19 +197,20 @@ export class AlertStatisticsService {
         }
       };
 
-      logger.info('[AlertStatisticsService] Statistics document prepared', {
+      logger.info('[AlertStatisticsService] Upserting statistics for date', {
+        date: periodStartDate,
         id: statisticsDoc.id,
         type,
-        periodStartDate: statisticsDoc.periodStartDate,
         generatedAt,
         alertsProcessed: alerts.length
       });
 
-      // Save to repository
+      // Save to repository (UPSERT operation - creates or updates existing document)
       const saved = await alertStatisticsRepository.saveStatistics(statisticsDoc);
 
-      logger.info('[AlertStatisticsService] Statistics generated and saved', {
+      logger.info('[AlertStatisticsService] Statistics upserted successfully', {
         type,
+        date: periodStartDate,
         id: saved.id,
         alertsProcessed: alerts.length,
         processingTimeMs

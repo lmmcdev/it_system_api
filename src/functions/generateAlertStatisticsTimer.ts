@@ -7,16 +7,18 @@
  */
 
 import { app, InvocationContext, Timer } from '@azure/functions';
-import { config } from '../config/environment';
 import { logger } from '../utils/logger';
 import { executeStatisticsGeneration } from '../utils/statisticsGenerationHelper';
 
 /**
  * Timer trigger function that generates alert statistics
  * Schedule: Configured via environment variable (default: every hour)
+ *
+ * Note: Schedule is read from environment variable at module load time.
+ * Default: "0 0 * * * *" (every hour at :00)
  */
 app.timer('generateAlertStatisticsTimer', {
-  schedule: config.statistics.timerSchedule, // "0 0 * * * *" = every hour at :00
+  schedule: process.env.STATISTICS_TIMER_SCHEDULE || '0 0 * * * *',
   handler: async (timer: Timer, context: InvocationContext) => {
     const functionName = 'generateAlertStatisticsTimer';
     const invocationId = context.invocationId;
@@ -25,7 +27,7 @@ app.timer('generateAlertStatisticsTimer', {
 
     try {
       logger.info('[Timer] Alert statistics generation started', {
-        schedule: config.statistics.timerSchedule,
+        schedule: process.env.STATISTICS_TIMER_SCHEDULE || '0 0 * * * *',
         isPastDue: timer.isPastDue,
         scheduleStatus: timer.scheduleStatus
       });

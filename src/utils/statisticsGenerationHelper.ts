@@ -7,6 +7,8 @@ import { alertStatisticsRepository } from '../repositories/AlertStatisticsReposi
 import { alertStatisticsService } from '../services/AlertStatisticsService';
 import { StatisticsPeriod } from '../models/AlertStatistics';
 import { logger } from './logger';
+import { ServiceError } from './errorHandler';
+import { validateISODate } from './validator';
 
 /**
  * Result of statistics generation process
@@ -39,8 +41,8 @@ export async function executeStatisticsGeneration(): Promise<StatisticsGeneratio
     const isInitialRun = await checkIfInitialRun();
 
     const period = isInitialRun
-      ? await determineInitialRunPeriod()
-      : await determineDailyPeriod();
+      ? determineInitialRunPeriod()
+      : determineDailyPeriod();
 
     logger.info('[Statistics Generation] Processing period determined', {
       isInitialRun,
@@ -121,49 +123,118 @@ async function checkIfInitialRun(): Promise<boolean> {
 }
 
 /**
- * Determine the period for initial run (all historical data)
- * Uses a very early start date to capture all data
+ * Determine the period for initial run
+ * With daily UPSERT pattern, initial run processes the current day just like daily runs
+ * This ensures consistent ID format and UPSERT behavior
+ *
+ * Note: To backfill historical data, run the timer function for each historical day
+ * or use a separate backfill script that processes each day individually
+ *
+ * SECURITY: Robust date handling with validation to prevent edge cases
  */
-async function determineInitialRunPeriod(): Promise<StatisticsPeriod> {
+function determineInitialRunPeriod(): StatisticsPeriod {
+  // Initial run now processes current day (same as daily run)
+  // This ensures UPSERT pattern works correctly with ID format: {type}_{YYYY-MM-DD}
   const now = new Date();
-  const endDate = now.toISOString();
 
-  // Start from a very early date to capture all historical data
-  // Using 2020-01-01 as Microsoft Defender alerts typically don't go back further
-  const startDate = new Date('2020-01-01T00:00:00Z').toISOString();
+  // SECURITY: Validate current time is valid
+  if (isNaN(now.getTime())) {
+    throw new ServiceError('System time is invalid - cannot determine period');
+  }
 
-  logger.info('[Statistics Generation] Initial run period determined', {
+  // Start of current day (00:00:00.000 UTC)
+  // Using Date.UTC for precision and avoiding DST/timezone issues
+  const startOfDay = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    0, 0, 0, 0
+  ));
+
+  // End of current day (23:59:59.999 UTC)
+  // Use 86400000ms (24 hours) - 1ms for precision
+  const endOfDay = new Date(startOfDay.getTime() + 86400000 - 1);
+
+  // SECURITY: Validate both dates are valid after calculation
+  if (isNaN(startOfDay.getTime()) || isNaN(endOfDay.getTime())) {
+    throw new ServiceError('Failed to calculate period dates - date calculation error');
+  }
+
+  const startDate = startOfDay.toISOString();
+  const endDate = endOfDay.toISOString();
+
+  // SECURITY: Validate ISO format succeeded
+  const startCheck = validateISODate(startDate);
+  const endCheck = validateISODate(endDate);
+
+  if (!startCheck.valid || !endCheck.valid) {
+    throw new ServiceError('Generated period dates are invalid - ISO format validation failed');
+  }
+
+  logger.info('[Statistics Generation] Initial run period determined (current day only)', {
     startDate,
     endDate,
-    periodType: 'custom'
+    periodType: 'daily',
+    note: 'Initial run processes current day to enable UPSERT pattern. For historical backfill, process each day separately.'
   });
 
   return {
     startDate,
     endDate,
-    periodType: 'custom'
+    periodType: 'daily'
   };
 }
 
 /**
  * Determine the period for daily incremental run
- * Processes alerts from the current day (00:00:00 to now)
+ * Processes alerts from the FULL current day (00:00:00 to 23:59:59.999 UTC)
+ * This ensures statistics always cover the complete day, enabling proper UPSERT
+ *
+ * SECURITY: Robust date handling with validation to prevent edge cases
  */
-async function determineDailyPeriod(): Promise<StatisticsPeriod> {
+function determineDailyPeriod(): StatisticsPeriod {
   const now = new Date();
 
-  // Start of current day (00:00:00 UTC)
-  const startOfDay = new Date(now);
-  startOfDay.setUTCHours(0, 0, 0, 0);
+  // SECURITY: Validate current time is valid
+  if (isNaN(now.getTime())) {
+    throw new ServiceError('System time is invalid - cannot determine period');
+  }
+
+  // Start of current day (00:00:00.000 UTC)
+  // Using Date.UTC for precision and avoiding DST/timezone issues
+  const startOfDay = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    0, 0, 0, 0
+  ));
+
+  // End of current day (23:59:59.999 UTC)
+  // Use 86400000ms (24 hours) - 1ms for precision
+  // This is more reliable than setUTCHours and handles edge cases
+  const endOfDay = new Date(startOfDay.getTime() + 86400000 - 1);
+
+  // SECURITY: Validate both dates are valid after calculation
+  if (isNaN(startOfDay.getTime()) || isNaN(endOfDay.getTime())) {
+    throw new ServiceError('Failed to calculate period dates - date calculation error');
+  }
+
   const startDate = startOfDay.toISOString();
+  const endDate = endOfDay.toISOString();
 
-  // Current time
-  const endDate = now.toISOString();
+  // SECURITY: Validate ISO format succeeded
+  const startCheck = validateISODate(startDate);
+  const endCheck = validateISODate(endDate);
 
-  logger.info('[Statistics Generation] Daily period determined', {
+  if (!startCheck.valid || !endCheck.valid) {
+    throw new ServiceError('Generated period dates are invalid - ISO format validation failed');
+  }
+
+  logger.info('[Statistics Generation] Daily period determined (full day)', {
     startDate,
     endDate,
-    periodType: 'daily'
+    periodType: 'daily',
+    note: 'Full day coverage enables UPSERT pattern (same ID per day)'
   });
 
   return {
