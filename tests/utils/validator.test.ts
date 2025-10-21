@@ -10,7 +10,8 @@ import {
   validateSearchText,
   validateFilterArray,
   validatePaginationParams,
-  validateRiskFilters
+  validateRiskFilters,
+  validateStatisticsFilters
 } from '../../src/utils/validator';
 
 describe('Validator Utilities', () => {
@@ -521,6 +522,222 @@ describe('Validator Utilities', () => {
       const result = validateRiskFilters({ userId: longUserId });
       expect(result.valid).toBe(false);
       expect(result.errors).toBeDefined();
+    });
+  });
+
+  describe('validateStatisticsFilters', () => {
+    describe('Date Format Handling', () => {
+      it('should accept YYYY-MM-DD format for startDate', () => {
+        const result = validateStatisticsFilters({ startDate: '2025-10-21' });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.startDate).toBe('2025-10-21');
+      });
+
+      it('should accept YYYY-MM-DD format for endDate', () => {
+        const result = validateStatisticsFilters({ endDate: '2025-10-22' });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.endDate).toBe('2025-10-22');
+      });
+
+      it('should accept ISO 8601 format for startDate and normalize to YYYY-MM-DD', () => {
+        const result = validateStatisticsFilters({ startDate: '2025-10-21T00:00:00Z' });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.startDate).toBe('2025-10-21');
+      });
+
+      it('should accept ISO 8601 format for endDate and normalize to YYYY-MM-DD', () => {
+        const result = validateStatisticsFilters({ endDate: '2025-10-22T23:59:59.999Z' });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.endDate).toBe('2025-10-22');
+      });
+
+      it('should accept date range in YYYY-MM-DD format', () => {
+        const result = validateStatisticsFilters({
+          startDate: '2025-10-21',
+          endDate: '2025-10-22'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.startDate).toBe('2025-10-21');
+        expect(result.sanitized?.endDate).toBe('2025-10-22');
+      });
+
+      it('should accept mixed formats and normalize both', () => {
+        const result = validateStatisticsFilters({
+          startDate: '2025-10-21',
+          endDate: '2025-10-22T23:59:59Z'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.startDate).toBe('2025-10-21');
+        expect(result.sanitized?.endDate).toBe('2025-10-22');
+      });
+
+      it('should reject invalid date format', () => {
+        const result = validateStatisticsFilters({ startDate: '2025/10/21' });
+        expect(result.valid).toBe(false);
+        expect(result.errors).toBeDefined();
+        expect(result.errors?.[0]).toContain('startDate');
+      });
+
+      it('should reject invalid date value', () => {
+        const result = validateStatisticsFilters({ startDate: '2025-02-30' });
+        expect(result.valid).toBe(false);
+        expect(result.errors).toBeDefined();
+      });
+    });
+
+    describe('Date Range Validation', () => {
+      it('should validate startDate is before endDate', () => {
+        const result = validateStatisticsFilters({
+          startDate: '2025-10-22',
+          endDate: '2025-10-21'
+        });
+        expect(result.valid).toBe(false);
+        expect(result.errors).toBeDefined();
+        expect(result.errors?.[0]).toContain('startDate must be before');
+      });
+
+      it('should allow startDate equal to endDate (same day)', () => {
+        const result = validateStatisticsFilters({
+          startDate: '2025-10-21',
+          endDate: '2025-10-21'
+        });
+        expect(result.valid).toBe(true);
+      });
+
+      it('should allow valid date range', () => {
+        const result = validateStatisticsFilters({
+          startDate: '2025-10-20',
+          endDate: '2025-10-22'
+        });
+        expect(result.valid).toBe(true);
+      });
+    });
+
+    describe('Statistics Type Validation', () => {
+      it('should accept valid statistics type', () => {
+        const result = validateStatisticsFilters({ type: 'detectionSource' });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.type).toBe('detectionSource');
+      });
+
+      it('should accept all valid statistics types', () => {
+        const validTypes = ['detectionSource', 'userImpact', 'ipThreats', 'attackTypes'];
+        for (const type of validTypes) {
+          const result = validateStatisticsFilters({ type });
+          expect(result.valid).toBe(true);
+          expect(result.sanitized?.type).toBe(type);
+        }
+      });
+
+      it('should reject invalid statistics type', () => {
+        const result = validateStatisticsFilters({ type: 'invalidType' });
+        expect(result.valid).toBe(false);
+        expect(result.errors).toBeDefined();
+        expect(result.errors?.[0]).toContain('type');
+      });
+    });
+
+    describe('TopN Validation', () => {
+      it('should accept valid topN parameter', () => {
+        const result = validateStatisticsFilters({ topN: '10' });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.topN).toBe(10);
+      });
+
+      it('should reject topN exceeding maximum', () => {
+        const result = validateStatisticsFilters({ topN: '101' });
+        expect(result.valid).toBe(false);
+        expect(result.errors).toBeDefined();
+        expect(result.errors?.[0]).toContain('topN');
+      });
+
+      it('should reject topN below minimum', () => {
+        const result = validateStatisticsFilters({ topN: '0' });
+        expect(result.valid).toBe(false);
+        expect(result.errors).toBeDefined();
+      });
+
+      it('should reject non-numeric topN', () => {
+        const result = validateStatisticsFilters({ topN: 'abc' });
+        expect(result.valid).toBe(false);
+        expect(result.errors).toBeDefined();
+      });
+    });
+
+    describe('Complete Filter Validation', () => {
+      it('should accept all valid filters together', () => {
+        const result = validateStatisticsFilters({
+          type: 'userImpact',
+          startDate: '2025-10-20',
+          endDate: '2025-10-22',
+          topN: '15'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.type).toBe('userImpact');
+        expect(result.sanitized?.startDate).toBe('2025-10-20');
+        expect(result.sanitized?.endDate).toBe('2025-10-22');
+        expect(result.sanitized?.topN).toBe(15);
+      });
+
+      it('should collect multiple validation errors', () => {
+        const result = validateStatisticsFilters({
+          type: 'invalid',
+          startDate: 'bad-date',
+          topN: '999'
+        });
+        expect(result.valid).toBe(false);
+        expect(result.errors).toBeDefined();
+        expect(result.errors?.length).toBeGreaterThanOrEqual(2);
+      });
+
+      it('should return valid true with no filters', () => {
+        const result = validateStatisticsFilters({});
+        expect(result.valid).toBe(true);
+        expect(result.sanitized).toBeUndefined();
+      });
+
+      it('should handle null values', () => {
+        const result = validateStatisticsFilters({
+          type: null,
+          startDate: null,
+          endDate: null,
+          topN: null
+        });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized).toBeUndefined();
+      });
+    });
+
+    describe('Bug Fix Verification - YYYY-MM-DD Support', () => {
+      it('should fix the bug: accept periodStartDate in YYYY-MM-DD format', () => {
+        const result = validateStatisticsFilters({
+          startDate: '2025-10-21',
+          endDate: '2025-10-22'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.errors).toBeUndefined();
+      });
+
+      it('should normalize dates to YYYY-MM-DD for database queries', () => {
+        const result = validateStatisticsFilters({
+          startDate: '2025-10-21T00:00:00.000Z',
+          endDate: '2025-10-22T23:59:59.999Z'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.startDate).toBe('2025-10-21');
+        expect(result.sanitized?.endDate).toBe('2025-10-22');
+      });
+
+      it('should match the periodStartDate field format in CosmosDB', () => {
+        // periodStartDate in DB is "2025-10-21" (YYYY-MM-DD)
+        const result = validateStatisticsFilters({
+          startDate: '2025-10-21',
+          endDate: '2025-10-21'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.startDate).toBe('2025-10-21');
+        expect(result.sanitized?.endDate).toBe('2025-10-21');
+      });
     });
   });
 });

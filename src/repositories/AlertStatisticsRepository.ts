@@ -266,17 +266,42 @@ export class AlertStatisticsRepository {
 
     try {
       // Validate date filters
+      // Accept both YYYY-MM-DD and ISO 8601 formats, normalize to YYYY-MM-DD
       if (filter.startDate) {
-        const validation = validateISODate(filter.startDate);
-        if (!validation.valid) {
-          throw new ValidationError(`Invalid startDate: ${validation.error}`);
+        // Check if it's already in YYYY-MM-DD format (10 characters)
+        const isSimpleDate = filter.startDate.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(filter.startDate);
+
+        if (isSimpleDate) {
+          // Already in correct format, validate it's a valid date
+          const date = new Date(filter.startDate + 'T00:00:00.000Z');
+          if (isNaN(date.getTime())) {
+            throw new ValidationError(`Invalid startDate: Date value is invalid`);
+          }
+        } else {
+          // Try as ISO 8601 format
+          const validation = validateISODate(filter.startDate);
+          if (!validation.valid) {
+            throw new ValidationError(`Invalid startDate: ${validation.error}`);
+          }
         }
       }
 
       if (filter.endDate) {
-        const validation = validateISODate(filter.endDate);
-        if (!validation.valid) {
-          throw new ValidationError(`Invalid endDate: ${validation.error}`);
+        // Check if it's already in YYYY-MM-DD format (10 characters)
+        const isSimpleDate = filter.endDate.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(filter.endDate);
+
+        if (isSimpleDate) {
+          // Already in correct format, validate it's a valid date
+          const date = new Date(filter.endDate + 'T00:00:00.000Z');
+          if (isNaN(date.getTime())) {
+            throw new ValidationError(`Invalid endDate: Date value is invalid`);
+          }
+        } else {
+          // Try as ISO 8601 format
+          const validation = validateISODate(filter.endDate);
+          if (!validation.valid) {
+            throw new ValidationError(`Invalid endDate: ${validation.error}`);
+          }
         }
       }
 

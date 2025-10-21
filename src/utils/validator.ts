@@ -817,6 +817,8 @@ export function validateTopNParam(
 
 /**
  * Validates filter object for alert statistics queries
+ * IMPORTANT: Statistics queries use YYYY-MM-DD format (not full ISO 8601 timestamps)
+ * This matches the periodStartDate field format in the database
  */
 export function validateStatisticsFilters(filters: {
   type?: string | null;
@@ -851,30 +853,50 @@ export function validateStatisticsFilters(filters: {
     }
   }
 
-  // Validate startDate
+  // Validate startDate - accepts both YYYY-MM-DD and ISO 8601 formats
+  // Normalizes to YYYY-MM-DD for database queries
   if (filters.startDate) {
-    const dateResult = validateISODate(filters.startDate);
-    if (!dateResult.valid) {
-      errors.push(`startDate: ${dateResult.error}`);
+    // Try YYYY-MM-DD format first (preferred for statistics)
+    const simpleDateResult = validateDateString(filters.startDate, { allowFuture: true });
+    if (simpleDateResult.valid) {
+      // Extract YYYY-MM-DD format
+      sanitized.startDate = filters.startDate.substring(0, 10);
     } else {
-      sanitized.startDate = filters.startDate;
+      // Fall back to ISO 8601 format for backward compatibility
+      const isoDateResult = validateISODate(filters.startDate);
+      if (isoDateResult.valid) {
+        // Extract YYYY-MM-DD from ISO timestamp
+        sanitized.startDate = filters.startDate.substring(0, 10);
+      } else {
+        errors.push(`startDate: Must be in YYYY-MM-DD format (e.g., 2025-10-21) or ISO 8601 format`);
+      }
     }
   }
 
-  // Validate endDate
+  // Validate endDate - accepts both YYYY-MM-DD and ISO 8601 formats
+  // Normalizes to YYYY-MM-DD for database queries
   if (filters.endDate) {
-    const dateResult = validateISODate(filters.endDate);
-    if (!dateResult.valid) {
-      errors.push(`endDate: ${dateResult.error}`);
+    // Try YYYY-MM-DD format first (preferred for statistics)
+    const simpleDateResult = validateDateString(filters.endDate, { allowFuture: true });
+    if (simpleDateResult.valid) {
+      // Extract YYYY-MM-DD format
+      sanitized.endDate = filters.endDate.substring(0, 10);
     } else {
-      sanitized.endDate = filters.endDate;
+      // Fall back to ISO 8601 format for backward compatibility
+      const isoDateResult = validateISODate(filters.endDate);
+      if (isoDateResult.valid) {
+        // Extract YYYY-MM-DD from ISO timestamp
+        sanitized.endDate = filters.endDate.substring(0, 10);
+      } else {
+        errors.push(`endDate: Must be in YYYY-MM-DD format (e.g., 2025-10-21) or ISO 8601 format`);
+      }
     }
   }
 
   // Validate date range logic
   if (sanitized.startDate && sanitized.endDate) {
-    const start = new Date(sanitized.startDate);
-    const end = new Date(sanitized.endDate);
+    const start = new Date(sanitized.startDate + 'T00:00:00.000Z');
+    const end = new Date(sanitized.endDate + 'T00:00:00.000Z');
 
     if (start > end) {
       errors.push('startDate must be before or equal to endDate');

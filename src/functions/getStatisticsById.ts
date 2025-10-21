@@ -1,6 +1,6 @@
 /**
  * HTTP GET endpoint to retrieve specific alert statistics by ID
- * GET /api/statistics/{id}
+ * GET /api/statistics/by-id/{id}
  *
  * Path parameters:
  * - id: Statistics document ID (format: {type}_{startDate}_{endDate})
@@ -19,7 +19,7 @@ import { logger } from '../utils/logger';
 app.http('getStatisticsById', {
   methods: ['GET'],
   authLevel: 'anonymous', // Auth handled in code
-  route: 'statistics/{id}',
+  route: 'statistics/by-id/{id}',
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     const functionName = 'getStatisticsById';
     const invocationId = context.invocationId;

@@ -139,16 +139,21 @@ GET /search/suggestions?q=mal&top=5&code=your-key
 
 **Query Parameters**:
 - `type` (optional): `detectionSource` | `userImpact` | `ipThreats` | `attackTypes`
-- `startDate` (optional): ISO 8601 date (YYYY-MM-DD)
-- `endDate` (optional): ISO 8601 date (YYYY-MM-DD)
+- `startDate` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-21`) - filters by `periodStartDate` field
+- `endDate` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-22`) - filters by `periodStartDate` field
 - `periodType` (optional): `hourly` | `daily` | `weekly` | `monthly` | `custom`
 - `pageSize` (optional): 1-100, default 50
 - `continuationToken` (optional): Pagination token
 
+**Date Filtering**: Returns statistics documents where `periodStartDate` falls within the specified range (inclusive). Both YYYY-MM-DD and ISO 8601 formats are accepted (normalized to YYYY-MM-DD internally).
+
 **Example**:
 ```bash
-# Get detection source stats for Oct 20, 2025
+# Get detection source stats for Oct 20, 2025 (single day)
 GET /statistics?type=detectionSource&startDate=2025-10-20&endDate=2025-10-20&code=your-key
+
+# Get all stats for Oct 20-22, 2025 (date range)
+GET /statistics?startDate=2025-10-20&endDate=2025-10-22&code=your-key
 ```
 
 **Response** (one document per day):
@@ -184,61 +189,95 @@ GET /statistics?type=detectionSource&startDate=2025-10-20&endDate=2025-10-20&cod
 
 ---
 
-### GET /statistics/{id}
+### GET /statistics/by-id/{id}
 **Description**: Get single statistics document by ID
 
 **Path Parameters**:
 - `id`: Statistics ID (format: `{type}_{YYYY-MM-DD}`)
 
+**Query Parameters**:
+- `partitionKey` (required): Partition key (periodStartDate in YYYY-MM-DD format)
+
 **Example**:
 ```bash
-GET /statistics/detectionSource_2025-10-20?code=your-key
+GET /statistics/by-id/detectionSource_2025-10-20?partitionKey=2025-10-20&code=your-key
 ```
 
 ---
 
 ### GET /statistics/detection-sources
-**Description**: Get latest detection source statistics
+**Description**: Get detection source statistics filtered by date range
 
 **Query Parameters**:
-- `startDate` (optional): ISO 8601 date
-- `endDate` (optional): ISO 8601 date
-- `topN` (optional): Number of top sources, default 10
+- `startDate` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-21`) - filters by `periodStartDate` field
+- `endDate` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-22`) - filters by `periodStartDate` field
+- `pageSize` (optional): 1-100, default 50
+- `continuationToken` (optional): Pagination token
+
+**Date Filtering**: Returns statistics documents where `periodStartDate` falls within the specified range (inclusive).
 
 **Example**:
 ```bash
-GET /statistics/detection-sources?startDate=2025-10-20&topN=5&code=your-key
+# Get detection source stats for Oct 20-22, 2025
+GET /statistics/detection-sources?startDate=2025-10-20&endDate=2025-10-22&code=your-key
+
+# Get stats for a single day
+GET /statistics/detection-sources?startDate=2025-10-21&endDate=2025-10-21&code=your-key
 ```
 
 ---
 
 ### GET /statistics/user-impact
-**Description**: Get latest user impact statistics
+**Description**: Get user impact statistics filtered by date range
 
 **Query Parameters**:
-- `startDate` (optional): ISO 8601 date
-- `endDate` (optional): ISO 8601 date
-- `topN` (optional): Number of top users, default 10
+- `startDate` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-21`) - filters by `periodStartDate` field
+- `endDate` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-22`) - filters by `periodStartDate` field
+- `pageSize` (optional): 1-100, default 50
+- `continuationToken` (optional): Pagination token
+
+**Date Filtering**: Returns statistics documents where `periodStartDate` falls within the specified range (inclusive).
+
+**Example**:
+```bash
+GET /statistics/user-impact?startDate=2025-10-21&endDate=2025-10-22&code=your-key
+```
 
 ---
 
 ### GET /statistics/ip-threats
-**Description**: Get latest IP threat statistics
+**Description**: Get IP threat statistics filtered by date range
 
 **Query Parameters**:
-- `startDate` (optional): ISO 8601 date
-- `endDate` (optional): ISO 8601 date
-- `topN` (optional): Number of top IPs, default 10
+- `startDate` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-21`) - filters by `periodStartDate` field
+- `endDate` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-22`) - filters by `periodStartDate` field
+- `pageSize` (optional): 1-100, default 50
+- `continuationToken` (optional): Pagination token
+
+**Date Filtering**: Returns statistics documents where `periodStartDate` falls within the specified range (inclusive).
+
+**Example**:
+```bash
+GET /statistics/ip-threats?startDate=2025-10-21&endDate=2025-10-22&code=your-key
+```
 
 ---
 
 ### GET /statistics/attack-types
-**Description**: Get latest attack type statistics
+**Description**: Get attack type statistics filtered by date range
 
 **Query Parameters**:
-- `startDate` (optional): ISO 8601 date
-- `endDate` (optional): ISO 8601 date
-- `topN` (optional): Number of top attack types, default 10
+- `startDate` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-21`) - filters by `periodStartDate` field
+- `endDate` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-22`) - filters by `periodStartDate` field
+- `pageSize` (optional): 1-100, default 50
+- `continuationToken` (optional): Pagination token
+
+**Date Filtering**: Returns statistics documents where `periodStartDate` falls within the specified range (inclusive).
+
+**Example**:
+```bash
+GET /statistics/attack-types?startDate=2025-10-21&endDate=2025-10-22&code=your-key
+```
 
 ---
 
@@ -365,9 +404,12 @@ GET /swagger/openapi.json
 - `skip`: Number of results to skip (search only)
 
 ### Date Filters
-- **Format**: ISO 8601 (`YYYY-MM-DDTHH:mm:ss.sssZ`)
-- **Example**: `2025-10-20T00:00:00.000Z`
-- **Short Format**: `YYYY-MM-DD` (for statistics queries)
+- **Alert Events**: ISO 8601 format (`YYYY-MM-DDTHH:mm:ss.sssZ`)
+  - Example: `2025-10-20T00:00:00.000Z`
+- **Statistics Queries**: YYYY-MM-DD format (preferred)
+  - Example: `2025-10-21`
+  - Also accepts ISO 8601 (automatically normalized to YYYY-MM-DD)
+  - Filters by the `periodStartDate` field
 
 ### Severity Values
 - `informational`
