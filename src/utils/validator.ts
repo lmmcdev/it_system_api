@@ -107,6 +107,14 @@ export function sanitizeQueryParam(
     .replace(/[<>\"'`]/g, '') // Remove XSS vectors
     .replace(/[\x00-\x1F\x7F]/g, ''); // Remove control characters
 
+  // Check if sanitization changed the value (contains XSS vectors or control chars)
+  if (sanitized !== value.trim()) {
+    return {
+      isValid: false,
+      error: 'Parameter contains invalid characters'
+    };
+  }
+
   // Check if sanitization removed too much
   if (sanitized.length === 0 && value.length > 0) {
     return {
@@ -499,4 +507,284 @@ export function validateFieldSelection(
   }
 
   return validatedFields.length > 0 ? validatedFields : undefined;
+}
+
+/**
+ * Validates filter object for risk detection events
+ */
+export function validateRiskFilters(filters: {
+  riskLevel?: string | null;
+  riskState?: string | null;
+  userId?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}): {
+  valid: boolean;
+  errors?: string[];
+  sanitized?: {
+    riskLevel?: string;
+    riskState?: string;
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+  };
+} {
+  const errors: string[] = [];
+  const sanitized: {
+    riskLevel?: string;
+    riskState?: string;
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+  } = {};
+
+  // Validate riskLevel
+  if (filters.riskLevel) {
+    const riskLevelResult = sanitizeQueryParam(
+      filters.riskLevel,
+      30,
+      /^[a-zA-Z]+$/
+    );
+
+    if (!riskLevelResult.isValid) {
+      errors.push(`riskLevel: ${riskLevelResult.error}`);
+    } else if (riskLevelResult.value) {
+      const allowedRiskLevels = ['low', 'medium', 'high', 'hidden', 'none', 'unknownfuturevalue'];
+      if (!allowedRiskLevels.includes(riskLevelResult.value.toLowerCase())) {
+        errors.push(`riskLevel: Must be one of ${allowedRiskLevels.join(', ')}`);
+      } else {
+        sanitized.riskLevel = riskLevelResult.value.toLowerCase();
+      }
+    }
+  }
+
+  // Validate riskState
+  if (filters.riskState) {
+    const riskStateResult = sanitizeQueryParam(
+      filters.riskState,
+      30,
+      /^[a-zA-Z]+$/
+    );
+
+    if (!riskStateResult.isValid) {
+      errors.push(`riskState: ${riskStateResult.error}`);
+    } else if (riskStateResult.value) {
+      const allowedRiskStates = [
+        'none',
+        'confirmedSafe',
+        'remediated',
+        'dismissed',
+        'atRisk',
+        'confirmedCompromised',
+        'unknownFutureValue'
+      ];
+
+      if (!allowedRiskStates.includes(riskStateResult.value)) {
+        errors.push(`riskState: Must be one of ${allowedRiskStates.join(', ')}`);
+      } else {
+        sanitized.riskState = riskStateResult.value;
+      }
+    }
+  }
+
+  // Validate userId
+  if (filters.userId) {
+    const userIdResult = sanitizeQueryParam(
+      filters.userId,
+      200,
+      /^[a-zA-Z0-9\-_@.]+$/
+    );
+
+    if (!userIdResult.isValid) {
+      errors.push(`userId: ${userIdResult.error}`);
+    } else if (userIdResult.value) {
+      sanitized.userId = userIdResult.value;
+    }
+  }
+
+  // Validate startDate
+  if (filters.startDate) {
+    const dateResult = validateISODate(filters.startDate);
+    if (!dateResult.valid) {
+      errors.push(`startDate: ${dateResult.error}`);
+    } else {
+      sanitized.startDate = filters.startDate;
+    }
+  }
+
+  // Validate endDate
+  if (filters.endDate) {
+    const dateResult = validateISODate(filters.endDate);
+    if (!dateResult.valid) {
+      errors.push(`endDate: ${dateResult.error}`);
+    } else {
+      sanitized.endDate = filters.endDate;
+    }
+  }
+
+  // Validate date range logic
+  if (sanitized.startDate && sanitized.endDate) {
+    const start = new Date(sanitized.startDate);
+    const end = new Date(sanitized.endDate);
+
+    if (start > end) {
+      errors.push('startDate must be before or equal to endDate');
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors: errors.length > 0 ? errors : undefined,
+    sanitized: Object.keys(sanitized).length > 0 ? sanitized : undefined
+  };
+}
+
+/**
+ * Validates statistics type parameter
+ */
+export function validateStatisticsType(type: string | null | undefined): ValidationResult {
+  if (!type) {
+    return { valid: false, error: 'Statistics type is required' };
+  }
+
+  const allowedTypes = ['detectionSource', 'userImpact', 'ipThreats', 'attackTypes'];
+
+  if (!allowedTypes.includes(type)) {
+    return {
+      valid: false,
+      error: `Invalid statistics type. Must be one of: ${allowedTypes.join(', ')}`
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validates topN parameter for statistics queries
+ */
+export function validateTopNParam(
+  topN: string | null | undefined
+): {
+  valid: boolean;
+  value?: number;
+  error?: string;
+} {
+  // Default value
+  if (!topN) {
+    return {
+      valid: true,
+      value: 10
+    };
+  }
+
+  const parsed = parseInt(topN, 10);
+
+  if (isNaN(parsed)) {
+    return {
+      valid: false,
+      error: 'topN must be a valid number'
+    };
+  }
+
+  if (parsed < 1) {
+    return {
+      valid: false,
+      error: 'topN must be at least 1'
+    };
+  }
+
+  if (parsed > 100) {
+    return {
+      valid: false,
+      error: 'topN cannot exceed 100'
+    };
+  }
+
+  return {
+    valid: true,
+    value: parsed
+  };
+}
+
+/**
+ * Validates filter object for alert statistics queries
+ */
+export function validateStatisticsFilters(filters: {
+  type?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  topN?: string | null;
+}): {
+  valid: boolean;
+  errors?: string[];
+  sanitized?: {
+    type?: string;
+    startDate?: string;
+    endDate?: string;
+    topN?: number;
+  };
+} {
+  const errors: string[] = [];
+  const sanitized: {
+    type?: string;
+    startDate?: string;
+    endDate?: string;
+    topN?: number;
+  } = {};
+
+  // Validate type
+  if (filters.type) {
+    const typeResult = validateStatisticsType(filters.type);
+    if (!typeResult.valid) {
+      errors.push(`type: ${typeResult.error}`);
+    } else {
+      sanitized.type = filters.type;
+    }
+  }
+
+  // Validate startDate
+  if (filters.startDate) {
+    const dateResult = validateISODate(filters.startDate);
+    if (!dateResult.valid) {
+      errors.push(`startDate: ${dateResult.error}`);
+    } else {
+      sanitized.startDate = filters.startDate;
+    }
+  }
+
+  // Validate endDate
+  if (filters.endDate) {
+    const dateResult = validateISODate(filters.endDate);
+    if (!dateResult.valid) {
+      errors.push(`endDate: ${dateResult.error}`);
+    } else {
+      sanitized.endDate = filters.endDate;
+    }
+  }
+
+  // Validate date range logic
+  if (sanitized.startDate && sanitized.endDate) {
+    const start = new Date(sanitized.startDate);
+    const end = new Date(sanitized.endDate);
+
+    if (start > end) {
+      errors.push('startDate must be before or equal to endDate');
+    }
+  }
+
+  // Validate topN
+  if (filters.topN !== null && filters.topN !== undefined) {
+    const topNResult = validateTopNParam(filters.topN);
+    if (!topNResult.valid) {
+      errors.push(`topN: ${topNResult.error}`);
+    } else {
+      sanitized.topN = topNResult.value;
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors: errors.length > 0 ? errors : undefined,
+    sanitized: Object.keys(sanitized).length > 0 ? sanitized : undefined
+  };
 }

@@ -3,4 +3,6 @@
  */
 export * from './ApiResponse';
 export * from './AlertEvent';
+export * from './RiskDetectionEvent';
 export * from './SearchModels';
+export * from './AlertStatistics';

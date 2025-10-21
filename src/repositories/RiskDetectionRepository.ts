@@ -1,23 +1,20 @@
 /**
- * CosmosDB repository for Alert Event data access (read-only)
+ * CosmosDB repository for Risk Detection Event data access (read-only)
  * Handles all CosmosDB read operations with proper error handling, pagination, and query tracing
  */
 
 import { CosmosClient, Container, Database } from '@azure/cosmos';
-import { AlertEvent, AlertEventDocument, AlertValidation } from '../models/AlertEvent';
+import { RiskDetectionEvent, RiskDetectionEventDocument, RiskDetectionValidation } from '../models/RiskDetectionEvent';
+import { PaginatedResponse as AlertPaginatedResponse } from './AlertEventRepository';
 import { config } from '../config/environment';
 import { logger } from '../utils/logger';
 import { NotFoundError, ServiceError, ValidationError, ConflictError } from '../utils/errorHandler';
+import { validateISODate } from '../utils/validator';
 
 /**
- * Paginated response interface
+ * Re-export PaginatedResponse for convenience
  */
-export interface PaginatedResponse<T> {
-  items: T[];
-  continuationToken?: string;
-  hasMore: boolean;
-  count: number;
-}
+export type PaginatedResponse<T> = AlertPaginatedResponse<T>;
 
 /**
  * Query trace information for logging
@@ -30,7 +27,7 @@ interface QueryTrace {
   itemCount: number;
 }
 
-export class AlertEventRepository {
+export class RiskDetectionRepository {
   private client: CosmosClient;
   private database: Database | null = null;
   private container: Container | null = null;
@@ -65,15 +62,15 @@ export class AlertEventRepository {
 
     try {
       this.database = this.client.database(config.cosmos.databaseId);
-      this.container = this.database.container(config.cosmos.alertContainerId);
+      this.container = this.database.container(config.cosmos.riskDetectionContainerId);
       this.isInitialized = true;
 
-      logger.info('[CosmosDB] Repository initialized successfully', {
+      logger.info('[CosmosDB] Risk Detection Repository initialized successfully', {
         database: config.cosmos.databaseId,
-        container: config.cosmos.alertContainerId
+        container: config.cosmos.riskDetectionContainerId
       });
     } catch (error) {
-      logger.error('[CosmosDB] Failed to initialize repository', error as Error);
+      logger.error('[CosmosDB] Failed to initialize Risk Detection Repository', error as Error);
       throw new ServiceError('Database initialization failed');
     }
   }
@@ -104,18 +101,18 @@ export class AlertEventRepository {
   }
 
   /**
-   * Get alert event by ID
+   * Get risk detection event by ID
    */
-  async getById(id: string): Promise<AlertEvent> {
+  async getById(id: string): Promise<RiskDetectionEvent> {
     const startTime = Date.now();
 
     try {
       const container = await this.getContainer();
 
-      logger.info('[CosmosDB] Fetching alert event by ID', { id });
+      logger.info('[CosmosDB] Fetching risk detection event by ID', { id });
 
       // Add timeout protection
-      const readPromise = container.item(id, id).read<AlertEventDocument>();
+      const readPromise = container.item(id, id).read<RiskDetectionEventDocument>();
       const response = await Promise.race([
         readPromise,
         this.createTimeoutPromise(this.QUERY_TIMEOUT_MS)
@@ -132,16 +129,16 @@ export class AlertEventRepository {
       });
 
       if (!response.resource) {
-        logger.warn('[CosmosDB] Alert event not found', { id });
-        throw new NotFoundError('Alert Event', id);
+        logger.warn('[CosmosDB] Risk detection event not found', { id });
+        throw new NotFoundError('Risk Detection Event', id);
       }
 
-      logger.info('[CosmosDB] Alert event fetched successfully', {
+      logger.info('[CosmosDB] Risk detection event fetched successfully', {
         id,
         executionTime: `${executionTime}ms`
       });
 
-      return this.mapToAlertEvent(response.resource);
+      return this.mapToRiskDetectionEvent(response.resource);
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
@@ -151,14 +148,14 @@ export class AlertEventRepository {
 
       // Handle 404 from CosmosDB
       if ((error as { code?: number }).code === 404) {
-        logger.warn('[CosmosDB] Alert event not found (404)', { id, executionTime: `${executionTime}ms` });
-        throw new NotFoundError('Alert Event', id);
+        logger.warn('[CosmosDB] Risk detection event not found (404)', { id, executionTime: `${executionTime}ms` });
+        throw new NotFoundError('Risk Detection Event', id);
       }
 
       // Handle 409 Conflict errors
       if ((error as { code?: number }).code === 409) {
         logger.error('[CosmosDB] Conflict error (409)', error as Error, { id });
-        throw new ConflictError('Conflict occurred while accessing alert event');
+        throw new ConflictError('Conflict occurred while accessing risk detection event');
       }
 
       // Handle 429 Throttling
@@ -173,25 +170,25 @@ export class AlertEventRepository {
         });
       }
 
-      logger.error('[CosmosDB] Failed to fetch alert event', error as Error, {
+      logger.error('[CosmosDB] Failed to fetch risk detection event', error as Error, {
         id,
         errorCode: (error as { code?: number }).code,
         executionTime: `${executionTime}ms`
       });
 
-      throw new ServiceError('Failed to fetch alert event');
+      throw new ServiceError('Failed to fetch risk detection event');
     }
   }
 
   /**
-   * Get all alert events with optional filtering and pagination
+   * Get all risk detection events with optional filtering and pagination
    * Uses parameterized queries to prevent SQL injection
    */
   async getAll(
     filter?: {
-      severity?: string;
-      status?: string;
-      category?: string;
+      riskLevel?: string;
+      riskState?: string;
+      userId?: string;
       startDate?: string;
       endDate?: string;
     },
@@ -199,38 +196,40 @@ export class AlertEventRepository {
       pageSize?: number;
       continuationToken?: string;
     }
-  ): Promise<PaginatedResponse<AlertEvent>> {
+  ): Promise<AlertPaginatedResponse<RiskDetectionEvent>> {
     const startTime = Date.now();
 
     try {
       // Validate filter inputs
-      if (filter?.severity && !AlertValidation.isValidSeverity(filter.severity)) {
+      if (filter?.riskLevel && !RiskDetectionValidation.isValidRiskLevel(filter.riskLevel)) {
         throw new ValidationError(
-          `Invalid severity value: ${filter.severity}. Must be one of: informational, low, medium, high, critical`
+          `Invalid riskLevel value: ${filter.riskLevel}. Must be one of: low, medium, high, hidden, none, unknownFutureValue`
         );
       }
 
-      if (filter?.status && !AlertValidation.isValidStatus(filter.status)) {
+      if (filter?.riskState && !RiskDetectionValidation.isValidRiskState(filter.riskState)) {
         throw new ValidationError(
-          `Invalid status value: ${filter.status}. Must be one of: new, inProgress, resolved`
+          `Invalid riskState value: ${filter.riskState}. Must be one of: none, confirmedSafe, remediated, dismissed, atRisk, confirmedCompromised, unknownFutureValue`
         );
-      }
-
-      if (filter?.category && !AlertValidation.isValidCategory(filter.category)) {
-        throw new ValidationError(`Invalid category value: ${filter.category}`);
       }
 
       // Validate date formats (ISO 8601)
-      if (filter?.startDate && isNaN(Date.parse(filter.startDate))) {
-        throw new ValidationError(
-          `Invalid startDate format: ${filter.startDate}. Must be a valid ISO 8601 date string`
-        );
+      if (filter?.startDate) {
+        const startDateValidation = validateISODate(filter.startDate);
+        if (!startDateValidation.valid) {
+          throw new ValidationError(
+            `Invalid startDate format: ${filter.startDate}. ${startDateValidation.error}`
+          );
+        }
       }
 
-      if (filter?.endDate && isNaN(Date.parse(filter.endDate))) {
-        throw new ValidationError(
-          `Invalid endDate format: ${filter.endDate}. Must be a valid ISO 8601 date string`
-        );
+      if (filter?.endDate) {
+        const endDateValidation = validateISODate(filter.endDate);
+        if (!endDateValidation.valid) {
+          throw new ValidationError(
+            `Invalid endDate format: ${filter.endDate}. ${endDateValidation.error}`
+          );
+        }
       }
 
       const container = await this.getContainer();
@@ -242,52 +241,47 @@ export class AlertEventRepository {
       const conditions: string[] = [];
       const parameters: { name: string; value: string }[] = [];
 
-      // Build parameterized query to prevent SQL injection (using nested structure: c.value.*)
-      if (filter?.severity) {
-        conditions.push('c.value.severity = @severity');
-        parameters.push({ name: '@severity', value: filter.severity });
+      // Build parameterized query to prevent SQL injection
+      if (filter?.riskLevel) {
+        conditions.push('c.riskLevel = @riskLevel');
+        parameters.push({ name: '@riskLevel', value: filter.riskLevel });
       }
 
-      if (filter?.status) {
-        conditions.push('c.value.status = @status');
-        parameters.push({ name: '@status', value: filter.status });
+      if (filter?.riskState) {
+        conditions.push('c.riskState = @riskState');
+        parameters.push({ name: '@riskState', value: filter.riskState });
       }
 
-      if (filter?.category) {
-        conditions.push('c.value.category = @category');
-        parameters.push({ name: '@category', value: filter.category });
+      if (filter?.userId) {
+        conditions.push('c.userId = @userId');
+        parameters.push({ name: '@userId', value: filter.userId });
       }
 
       if (filter?.startDate) {
-        conditions.push('c.value.createdDateTime >= @startDate');
+        conditions.push('c.detectedDateTime >= @startDate');
         parameters.push({ name: '@startDate', value: filter.startDate });
       }
 
       if (filter?.endDate) {
-        conditions.push('c.value.createdDateTime <= @endDate');
+        conditions.push('c.detectedDateTime <= @endDate');
         parameters.push({ name: '@endDate', value: filter.endDate });
       }
 
-      // Build WHERE clause
-      // NOTE: IS_DEFINED() filter removed - causing "invalid input" error in this container
-      // All valid documents have c.value property based on testing
       if (conditions.length > 0) {
         query += ' WHERE ' + conditions.join(' AND ');
       }
 
-      // NOTE: ORDER BY commented out due to missing composite index
-      // To re-enable: Create composite index in Azure Portal:
-      // Path: /value/createdDateTime (DESC)
-      // query += ' ORDER BY c.value.createdDateTime DESC';
+      // Order by detected date descending (most recent first)
+      query += ' ORDER BY c.detectedDateTime DESC';
 
-      logger.info('[CosmosDB] Executing query with pagination', {
+      logger.info('[CosmosDB] Executing risk detection query with pagination', {
         filter,
         pageSize,
         hasContinuationToken: !!options?.continuationToken
       });
 
       // Execute query with pagination and timeout protection
-      const queryIterator = container.items.query<AlertEventDocument>(
+      const queryIterator = container.items.query<RiskDetectionEventDocument>(
         {
           query: query,
           parameters: parameters
@@ -315,7 +309,7 @@ export class AlertEventRepository {
         itemCount: response.resources.length
       });
 
-      logger.info('[CosmosDB] Query executed successfully', {
+      logger.info('[CosmosDB] Risk detection query executed successfully', {
         itemCount: response.resources.length,
         hasMore: response.hasMoreResults,
         requestCharge: `${(response.requestCharge || 0).toFixed(2)} RU`,
@@ -323,7 +317,7 @@ export class AlertEventRepository {
       });
 
       return {
-        items: response.resources.map(resource => this.mapToAlertEvent(resource)),
+        items: response.resources.map(resource => this.mapToRiskDetectionEvent(resource)),
         continuationToken: response.continuationToken,
         hasMore: response.hasMoreResults,
         count: response.resources.length
@@ -338,17 +332,17 @@ export class AlertEventRepository {
 
       // Handle 409 Conflict errors
       if ((error as { code?: number }).code === 409) {
-        logger.error('[CosmosDB] Conflict error (409) during query', error as Error, {
+        logger.error('[CosmosDB] Conflict error (409) during risk detection query', error as Error, {
           filter,
           executionTime: `${executionTime}ms`
         });
-        throw new ConflictError('Conflict occurred while querying alert events');
+        throw new ConflictError('Conflict occurred while querying risk detection events');
       }
 
       // Handle 429 Throttling
       if ((error as { code?: number }).code === 429) {
         const retryAfter = (error as any).retryAfterInMilliseconds || 1000;
-        logger.error('[CosmosDB] Request throttled (429) during query', error as Error, {
+        logger.error('[CosmosDB] Request throttled (429) during risk detection query', error as Error, {
           filter,
           retryAfter: `${retryAfter}ms`,
           executionTime: `${executionTime}ms`
@@ -358,50 +352,50 @@ export class AlertEventRepository {
         });
       }
 
-      logger.error('[CosmosDB] Query failed', error as Error, {
+      logger.error('[CosmosDB] Risk detection query failed', error as Error, {
         filter,
         errorCode: (error as { code?: number }).code,
         executionTime: `${executionTime}ms`
       });
 
-      throw new ServiceError('Failed to fetch alert events');
+      throw new ServiceError('Failed to fetch risk detection events');
     }
   }
 
   /**
-   * Get alert events by severity
+   * Get risk detection events by risk level
    */
-  async getBySeverity(severity: string, options?: { pageSize?: number; continuationToken?: string }): Promise<PaginatedResponse<AlertEvent>> {
-    return this.getAll({ severity }, options);
+  async getByRiskLevel(riskLevel: string, options?: { pageSize?: number; continuationToken?: string }): Promise<AlertPaginatedResponse<RiskDetectionEvent>> {
+    return this.getAll({ riskLevel }, options);
   }
 
   /**
-   * Get alert events by status
+   * Get risk detection events by risk state
    */
-  async getByStatus(status: string, options?: { pageSize?: number; continuationToken?: string }): Promise<PaginatedResponse<AlertEvent>> {
-    return this.getAll({ status }, options);
+  async getByRiskState(riskState: string, options?: { pageSize?: number; continuationToken?: string }): Promise<AlertPaginatedResponse<RiskDetectionEvent>> {
+    return this.getAll({ riskState }, options);
   }
 
   /**
-   * Get alert events by category
+   * Get risk detection events by user ID
    */
-  async getByCategory(category: string, options?: { pageSize?: number; continuationToken?: string }): Promise<PaginatedResponse<AlertEvent>> {
-    return this.getAll({ category }, options);
+  async getByUserId(userId: string, options?: { pageSize?: number; continuationToken?: string }): Promise<AlertPaginatedResponse<RiskDetectionEvent>> {
+    return this.getAll({ userId }, options);
   }
 
   /**
-   * Get alert events within a date range
+   * Get risk detection events within a date range
    */
   async getByDateRange(
     startDate: string,
     endDate: string,
     options?: { pageSize?: number; continuationToken?: string }
-  ): Promise<PaginatedResponse<AlertEvent>> {
+  ): Promise<AlertPaginatedResponse<RiskDetectionEvent>> {
     return this.getAll({ startDate, endDate }, options);
   }
 
   /**
-   * Check if alert event exists
+   * Check if risk detection event exists
    */
   async exists(id: string): Promise<boolean> {
     try {
@@ -416,13 +410,13 @@ export class AlertEventRepository {
   }
 
   /**
-   * Map CosmosDB document to AlertEvent model
-   * Documents are returned as-is since structure matches the AlertEvent interface
+   * Map CosmosDB document to RiskDetectionEvent model
+   * Documents are returned as-is since structure matches the RiskDetectionEvent interface
    */
-  private mapToAlertEvent(doc: AlertEventDocument): AlertEvent {
+  private mapToRiskDetectionEvent(doc: RiskDetectionEventDocument): RiskDetectionEvent {
     return doc;
   }
 }
 
 // Export singleton instance
-export const alertEventRepository = new AlertEventRepository();
+export const riskDetectionRepository = new RiskDetectionRepository();

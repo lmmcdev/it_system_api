@@ -10,11 +10,18 @@ export interface EnvironmentConfig {
     databaseId: string;
     containerId: string;
     alertContainerId: string;
+    riskDetectionContainerId: string;
+    alertStatisticsContainerId: string;
   };
   search: {
     endpoint: string;
     apiKey: string;
     indexName: string;
+  };
+  statistics: {
+    batchSize: number;
+    topNDefault: number;
+    timerSchedule: string;
   };
   app: {
     nodeEnv: string;
@@ -31,6 +38,7 @@ export function getEnvironmentConfig(): EnvironmentConfig {
     'COSMOS_KEY',
     'COSMOS_DATABASE_ID',
     'COSMOS_CONTAINER_ALERT',
+    'COSMOS_CONTAINER_RISK_DETECTION',
     'SEARCH_ENDPOINT',
     'SEARCH_API_KEY',
     'SEARCH_INDEX_NAME'
@@ -49,12 +57,19 @@ export function getEnvironmentConfig(): EnvironmentConfig {
       key: process.env.COSMOS_KEY!,
       databaseId: process.env.COSMOS_DATABASE_ID!,
       containerId: process.env.COSMOS_CONTAINER_ID!,
-      alertContainerId: process.env.COSMOS_CONTAINER_ALERT!
+      alertContainerId: process.env.COSMOS_CONTAINER_ALERT!,
+      riskDetectionContainerId: process.env.COSMOS_CONTAINER_RISK_DETECTION!,
+      alertStatisticsContainerId: process.env.COSMOS_CONTAINER_ALERT_STATISTICS || 'alerts_statistics'
     },
     search: {
       endpoint: process.env.SEARCH_ENDPOINT!,
       apiKey: process.env.SEARCH_API_KEY!,
       indexName: process.env.SEARCH_INDEX_NAME!
+    },
+    statistics: {
+      batchSize: parseInt(process.env.STATISTICS_BATCH_SIZE || '100', 10),
+      topNDefault: parseInt(process.env.STATISTICS_TOP_N_DEFAULT || '10', 10),
+      timerSchedule: process.env.STATISTICS_TIMER_SCHEDULE || '0 0 * * * *'
     },
     app: {
       nodeEnv: process.env.NODE_ENV || 'development',

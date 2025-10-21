@@ -8,7 +8,8 @@ import {
   validateISODate,
   validateSearchText,
   validateFilterArray,
-  validatePaginationParams
+  validatePaginationParams,
+  validateRiskFilters
 } from '../../src/utils/validator';
 
 describe('Validator Utilities', () => {
@@ -194,6 +195,183 @@ describe('Validator Utilities', () => {
       const result = validatePaginationParams('50', 'token<script>');
       expect(result.valid).toBe(false);
       expect(result.error).toContain('invalid characters');
+    });
+  });
+
+  describe('validateRiskFilters', () => {
+    it('should accept valid riskLevel filter', () => {
+      const result = validateRiskFilters({ riskLevel: 'high' });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized?.riskLevel).toBe('high');
+    });
+
+    it('should accept all valid riskLevel values', () => {
+      const validLevels = ['low', 'medium', 'high', 'hidden', 'none', 'unknownFutureValue'];
+
+      for (const level of validLevels) {
+        const result = validateRiskFilters({ riskLevel: level });
+        expect(result.valid).toBe(true);
+        // Validator normalizes to lowercase
+        expect(result.sanitized?.riskLevel).toBe(level.toLowerCase());
+      }
+    });
+
+    it('should reject invalid riskLevel', () => {
+      const result = validateRiskFilters({ riskLevel: 'invalid' });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors?.[0]).toContain('riskLevel');
+    });
+
+    it('should accept valid riskState filter', () => {
+      const result = validateRiskFilters({ riskState: 'atRisk' });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized?.riskState).toBe('atRisk');
+    });
+
+    it('should accept all valid riskState values', () => {
+      const validStates = [
+        'none',
+        'confirmedSafe',
+        'remediated',
+        'dismissed',
+        'atRisk',
+        'confirmedCompromised',
+        'unknownFutureValue'
+      ];
+
+      for (const state of validStates) {
+        const result = validateRiskFilters({ riskState: state });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.riskState).toBe(state);
+      }
+    });
+
+    it('should reject invalid riskState', () => {
+      const result = validateRiskFilters({ riskState: 'invalid' });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors?.[0]).toContain('riskState');
+    });
+
+    it('should accept valid userId filter', () => {
+      const result = validateRiskFilters({ userId: 'user@example.com' });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized?.userId).toBe('user@example.com');
+    });
+
+    it('should accept userId with various valid characters', () => {
+      const validUserIds = [
+        'user@example.com',
+        'user.name@example.com',
+        'user_name@example.com',
+        'user-name@example.com',
+        'User123@Example.Com'
+      ];
+
+      for (const userId of validUserIds) {
+        const result = validateRiskFilters({ userId });
+        expect(result.valid).toBe(true);
+        expect(result.sanitized?.userId).toBeDefined();
+      }
+    });
+
+    it('should reject userId with invalid characters', () => {
+      const result = validateRiskFilters({ userId: 'user<script>@example.com' });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+    });
+
+    it('should accept valid startDate filter', () => {
+      const result = validateRiskFilters({ startDate: '2025-10-20T10:00:00Z' });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized?.startDate).toBe('2025-10-20T10:00:00Z');
+    });
+
+    it('should reject invalid startDate format', () => {
+      const result = validateRiskFilters({ startDate: '2025/10/20' });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors?.[0]).toContain('startDate');
+    });
+
+    it('should accept valid endDate filter', () => {
+      const result = validateRiskFilters({ endDate: '2025-10-31T23:59:59Z' });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized?.endDate).toBe('2025-10-31T23:59:59Z');
+    });
+
+    it('should reject invalid endDate format', () => {
+      const result = validateRiskFilters({ endDate: 'not-a-date' });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors?.[0]).toContain('endDate');
+    });
+
+    it('should validate date range logic', () => {
+      const result = validateRiskFilters({
+        startDate: '2025-10-31T00:00:00Z',
+        endDate: '2025-10-01T00:00:00Z'
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors?.[0]).toContain('startDate must be before');
+    });
+
+    it('should accept multiple valid filters', () => {
+      const result = validateRiskFilters({
+        riskLevel: 'high',
+        riskState: 'atRisk',
+        userId: 'user@example.com',
+        startDate: '2025-10-01T00:00:00Z',
+        endDate: '2025-10-31T23:59:59Z'
+      });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized?.riskLevel).toBe('high');
+      expect(result.sanitized?.riskState).toBe('atRisk');
+      expect(result.sanitized?.userId).toBe('user@example.com');
+      expect(result.sanitized?.startDate).toBe('2025-10-01T00:00:00Z');
+      expect(result.sanitized?.endDate).toBe('2025-10-31T23:59:59Z');
+    });
+
+    it('should collect multiple validation errors', () => {
+      const result = validateRiskFilters({
+        riskLevel: 'invalid',
+        riskState: 'also-invalid',
+        startDate: 'bad-date'
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors?.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should return valid true with no filters', () => {
+      const result = validateRiskFilters({});
+      expect(result.valid).toBe(true);
+      expect(result.sanitized).toBeUndefined();
+    });
+
+    it('should handle null values', () => {
+      const result = validateRiskFilters({
+        riskLevel: null,
+        riskState: null,
+        userId: null
+      });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized).toBeUndefined();
+    });
+
+    it('should normalize riskLevel to lowercase', () => {
+      const result = validateRiskFilters({ riskLevel: 'HIGH' });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized?.riskLevel).toBe('high');
+    });
+
+    it('should reject userId exceeding maximum length', () => {
+      const longUserId = 'a'.repeat(201) + '@example.com';
+      const result = validateRiskFilters({ userId: longUserId });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
     });
   });
 });

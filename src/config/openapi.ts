@@ -30,6 +30,14 @@ export const openApiSpec = {
       description: 'Operations for security alert events'
     },
     {
+      name: 'Risk Detection Events',
+      description: 'Operations for risk detection events'
+    },
+    {
+      name: 'Alert Statistics',
+      description: 'Operations for alert statistics and aggregations'
+    },
+    {
       name: 'Search',
       description: 'Search operations using Azure Cognitive Search'
     },
@@ -200,6 +208,236 @@ export const openApiSpec = {
           },
           '404': {
             description: 'Alert event not found',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/risk-detections': {
+      get: {
+        tags: ['Risk Detection Events'],
+        summary: 'Get all risk detection events',
+        description: 'Retrieves all risk detection events from CosmosDB with optional filters',
+        operationId: 'getAllRiskDetections',
+        parameters: [
+          {
+            name: 'riskLevel',
+            in: 'query',
+            description: 'Filter by risk level',
+            schema: {
+              type: 'string',
+              enum: ['low', 'medium', 'high', 'hidden', 'none', 'unknownFutureValue']
+            }
+          },
+          {
+            name: 'riskState',
+            in: 'query',
+            description: 'Filter by risk state',
+            schema: {
+              type: 'string',
+              enum: ['none', 'confirmedSafe', 'remediated', 'dismissed', 'atRisk', 'confirmedCompromised', 'unknownFutureValue']
+            }
+          },
+          {
+            name: 'userId',
+            in: 'query',
+            description: 'Filter by user ID',
+            schema: {
+              type: 'string',
+              example: 'user@example.com'
+            }
+          },
+          {
+            name: 'startDate',
+            in: 'query',
+            description: 'Filter by detection date start (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-01T00:00:00Z'
+            }
+          },
+          {
+            name: 'endDate',
+            in: 'query',
+            description: 'Filter by detection date end (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-31T23:59:59Z'
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          },
+          {
+            name: 'continuationToken',
+            in: 'query',
+            description: 'Continuation token for pagination',
+            schema: {
+              type: 'string'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'List of risk detection events retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            items: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/RiskDetectionEvent'
+                              }
+                            },
+                            pagination: {
+                              type: 'object',
+                              properties: {
+                                count: {
+                                  type: 'integer',
+                                  description: 'Number of items in current page'
+                                },
+                                hasMore: {
+                                  type: 'boolean',
+                                  description: 'Whether more pages are available'
+                                },
+                                continuationToken: {
+                                  type: 'string',
+                                  description: 'Token for next page'
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid filter parameters',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/risk-detections/{id}': {
+      get: {
+        tags: ['Risk Detection Events'],
+        summary: 'Get risk detection event by ID',
+        description: 'Retrieves a specific risk detection event by its document ID',
+        operationId: 'getRiskDetectionById',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'Risk Detection Event document ID (partition key)',
+            schema: {
+              type: 'string',
+              format: 'uuid',
+              example: '5da67c0f-2962-5077-b486-537815e9e284'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Risk detection event retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          $ref: '#/components/schemas/RiskDetectionEvent'
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '404': {
+            description: 'Risk detection event not found',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
             content: {
               'application/json': {
                 schema: {
@@ -658,10 +896,809 @@ export const openApiSpec = {
           }
         }
       }
+    },
+    '/statistics': {
+      get: {
+        tags: ['Alert Statistics'],
+        summary: 'Query alert statistics',
+        description: 'Retrieves aggregated alert statistics with optional filtering by type, date range, and period',
+        operationId: 'getStatistics',
+        parameters: [
+          {
+            name: 'type',
+            in: 'query',
+            description: 'Statistics type filter',
+            schema: {
+              type: 'string',
+              enum: ['detectionSource', 'userImpact', 'ipThreats', 'attackTypes']
+            }
+          },
+          {
+            name: 'startDate',
+            in: 'query',
+            description: 'Filter by period start date (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-01T00:00:00Z'
+            }
+          },
+          {
+            name: 'endDate',
+            in: 'query',
+            description: 'Filter by period end date (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-31T23:59:59Z'
+            }
+          },
+          {
+            name: 'periodType',
+            in: 'query',
+            description: 'Period type filter',
+            schema: {
+              type: 'string',
+              enum: ['hourly', 'daily', 'weekly', 'monthly', 'custom']
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          },
+          {
+            name: 'continuationToken',
+            in: 'query',
+            description: 'Continuation token for pagination',
+            schema: {
+              type: 'string'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Statistics retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            statistics: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/AlertStatisticsDocument'
+                              }
+                            },
+                            pagination: {
+                              $ref: '#/components/schemas/PaginationInfo'
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/statistics/{id}': {
+      get: {
+        tags: ['Alert Statistics'],
+        summary: 'Get alert statistics by ID',
+        description: 'Retrieves a specific alert statistics document by its ID and partition key',
+        operationId: 'getStatisticsById',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'Statistics document ID (format: {type}_{startDate}_{endDate})',
+            schema: {
+              type: 'string',
+              example: 'detectionSource_2025-10-01_2025-10-31'
+            }
+          },
+          {
+            name: 'partitionKey',
+            in: 'query',
+            required: true,
+            description: 'Partition key (periodStartDate in YYYY-MM-DD format)',
+            schema: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+              example: '2025-10-01'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Statistics document retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          $ref: '#/components/schemas/AlertStatisticsDocument'
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid parameters',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '404': {
+            description: 'Statistics document not found',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/statistics/detection-sources': {
+      get: {
+        tags: ['Alert Statistics'],
+        summary: 'Get detection source statistics',
+        description: 'Retrieves statistics aggregated by detection source (Microsoft Defender products, antivirus, etc.)',
+        operationId: 'getDetectionSourceStatistics',
+        parameters: [
+          {
+            name: 'startDate',
+            in: 'query',
+            description: 'Filter by period start date (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-01T00:00:00Z'
+            }
+          },
+          {
+            name: 'endDate',
+            in: 'query',
+            description: 'Filter by period end date (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-31T23:59:59Z'
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          },
+          {
+            name: 'continuationToken',
+            in: 'query',
+            description: 'Continuation token for pagination',
+            schema: {
+              type: 'string'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Detection source statistics retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            statistics: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/AlertStatisticsDocument'
+                              }
+                            },
+                            pagination: {
+                              $ref: '#/components/schemas/PaginationInfo'
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/statistics/user-impact': {
+      get: {
+        tags: ['Alert Statistics'],
+        summary: 'Get user impact statistics',
+        description: 'Retrieves statistics about affected users, including top users by alert count and users with critical alerts',
+        operationId: 'getUserImpactStatistics',
+        parameters: [
+          {
+            name: 'startDate',
+            in: 'query',
+            description: 'Filter by period start date (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-01T00:00:00Z'
+            }
+          },
+          {
+            name: 'endDate',
+            in: 'query',
+            description: 'Filter by period end date (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-31T23:59:59Z'
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          },
+          {
+            name: 'continuationToken',
+            in: 'query',
+            description: 'Continuation token for pagination',
+            schema: {
+              type: 'string'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'User impact statistics retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            statistics: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/AlertStatisticsDocument'
+                              }
+                            },
+                            pagination: {
+                              $ref: '#/components/schemas/PaginationInfo'
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/statistics/ip-threats': {
+      get: {
+        tags: ['Alert Statistics'],
+        summary: 'Get IP threat statistics',
+        description: 'Retrieves statistics about threatening IP addresses and domains, including top attackers',
+        operationId: 'getIpThreatStatistics',
+        parameters: [
+          {
+            name: 'startDate',
+            in: 'query',
+            description: 'Filter by period start date (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-01T00:00:00Z'
+            }
+          },
+          {
+            name: 'endDate',
+            in: 'query',
+            description: 'Filter by period end date (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-31T23:59:59Z'
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          },
+          {
+            name: 'continuationToken',
+            in: 'query',
+            description: 'Continuation token for pagination',
+            schema: {
+              type: 'string'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'IP threat statistics retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            statistics: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/AlertStatisticsDocument'
+                              }
+                            },
+                            pagination: {
+                              $ref: '#/components/schemas/PaginationInfo'
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/statistics/attack-types': {
+      get: {
+        tags: ['Alert Statistics'],
+        summary: 'Get attack type statistics',
+        description: 'Retrieves statistics aggregated by attack characteristics (severity, category, MITRE techniques, threat families, status)',
+        operationId: 'getAttackTypeStatistics',
+        parameters: [
+          {
+            name: 'startDate',
+            in: 'query',
+            description: 'Filter by period start date (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-01T00:00:00Z'
+            }
+          },
+          {
+            name: 'endDate',
+            in: 'query',
+            description: 'Filter by period end date (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-10-31T23:59:59Z'
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          },
+          {
+            name: 'continuationToken',
+            in: 'query',
+            description: 'Continuation token for pagination',
+            schema: {
+              type: 'string'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Attack type statistics retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            statistics: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/AlertStatisticsDocument'
+                              }
+                            },
+                            pagination: {
+                              $ref: '#/components/schemas/PaginationInfo'
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   components: {
     schemas: {
+      RiskDetectionEvent: {
+        type: 'object',
+        description: 'Microsoft Graph Security Risk Detection Event',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'Document ID (partition key)'
+          },
+          userId: {
+            type: 'string',
+            description: 'User ID associated with the risk detection'
+          },
+          userDisplayName: {
+            type: 'string',
+            description: 'User display name'
+          },
+          userPrincipalName: {
+            type: 'string',
+            description: 'User principal name'
+          },
+          riskType: {
+            type: 'string',
+            enum: [
+              'unlikelyTravel',
+              'anonymizedIPAddress',
+              'maliciousIPAddress',
+              'unfamiliarFeatures',
+              'malwareInfectedIPAddress',
+              'suspiciousIPAddress',
+              'leakedCredentials',
+              'investigationsThreatIntelligence',
+              'generic',
+              'adminConfirmedUserCompromised',
+              'mcasImpossibleTravel',
+              'mcasSuspiciousInboxManipulationRules',
+              'investigationsThreatIntelligenceSigninLinked',
+              'maliciousIPAddressValidCredentialsBlockedIP',
+              'unknownFutureValue'
+            ],
+            description: 'Type of risk detected'
+          },
+          riskLevel: {
+            type: 'string',
+            enum: ['low', 'medium', 'high', 'hidden', 'none', 'unknownFutureValue'],
+            description: 'Risk level'
+          },
+          riskState: {
+            type: 'string',
+            enum: ['none', 'confirmedSafe', 'remediated', 'dismissed', 'atRisk', 'confirmedCompromised', 'unknownFutureValue'],
+            description: 'Risk state'
+          },
+          riskDetail: {
+            type: 'string',
+            description: 'Details about the detected risk'
+          },
+          detectedDateTime: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date and time the risk was detected'
+          },
+          lastUpdatedDateTime: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date and time the risk detection was last updated'
+          },
+          activity: {
+            type: 'string',
+            enum: ['signin', 'user', 'unknownFutureValue'],
+            description: 'Activity type'
+          },
+          location: {
+            type: 'object',
+            properties: {
+              city: {
+                type: 'string'
+              },
+              state: {
+                type: 'string'
+              },
+              countryOrRegion: {
+                type: 'string'
+              },
+              geoCoordinates: {
+                type: 'object',
+                properties: {
+                  latitude: {
+                    type: 'number'
+                  },
+                  longitude: {
+                    type: 'number'
+                  }
+                }
+              }
+            },
+            description: 'Location information'
+          },
+          ipAddress: {
+            type: 'string',
+            description: 'IP address associated with the risk'
+          },
+          source: {
+            type: 'string',
+            description: 'Source of the risk detection'
+          },
+          requestId: {
+            type: 'string',
+            description: 'Request ID'
+          },
+          correlationId: {
+            type: 'string',
+            description: 'Correlation ID'
+          }
+        },
+        required: ['id', 'userId', 'riskType', 'riskLevel', 'riskState', 'riskDetail', 'detectedDateTime', 'activity']
+      },
       AlertEvent: {
         type: 'object',
         description: 'Microsoft Graph Security Alert Event',
@@ -1060,6 +2097,274 @@ export const openApiSpec = {
             format: 'date-time'
           }
         }
+      },
+      PaginationInfo: {
+        type: 'object',
+        description: 'Pagination information',
+        properties: {
+          count: {
+            type: 'integer',
+            description: 'Number of items in current response'
+          },
+          hasMore: {
+            type: 'boolean',
+            description: 'Whether more results are available'
+          },
+          continuationToken: {
+            type: 'string',
+            description: 'Token to fetch next page',
+            nullable: true
+          }
+        }
+      },
+      AlertStatisticsDocument: {
+        type: 'object',
+        description: 'Alert statistics document from CosmosDB',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Document ID (format: {type}_{startDate}_{endDate})',
+            example: 'detectionSource_2025-10-01_2025-10-31'
+          },
+          periodStartDate: {
+            type: 'string',
+            pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+            description: 'Partition key - period start date in YYYY-MM-DD format',
+            example: '2025-10-01'
+          },
+          type: {
+            type: 'string',
+            enum: ['detectionSource', 'userImpact', 'ipThreats', 'attackTypes'],
+            description: 'Statistics type'
+          },
+          period: {
+            type: 'object',
+            properties: {
+              startDate: {
+                type: 'string',
+                format: 'date-time',
+                description: 'Period start date (ISO 8601)'
+              },
+              endDate: {
+                type: 'string',
+                format: 'date-time',
+                description: 'Period end date (ISO 8601)'
+              },
+              periodType: {
+                type: 'string',
+                enum: ['hourly', 'daily', 'weekly', 'monthly', 'custom'],
+                description: 'Period type'
+              }
+            }
+          },
+          generatedAt: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Timestamp when statistics were generated'
+          },
+          detectionSourceStats: {
+            type: 'object',
+            description: 'Detection source statistics (only present when type=detectionSource)',
+            nullable: true,
+            properties: {
+              microsoftDefenderForEndpoint: {
+                type: 'integer'
+              },
+              microsoftDefenderForOffice365: {
+                type: 'integer'
+              },
+              microsoftDefenderForCloudApps: {
+                type: 'integer'
+              },
+              microsoftDefenderForIdentity: {
+                type: 'integer'
+              },
+              azureAdIdentityProtection: {
+                type: 'integer'
+              },
+              antivirus: {
+                type: 'integer'
+              },
+              custom: {
+                type: 'integer'
+              },
+              other: {
+                type: 'integer'
+              },
+              total: {
+                type: 'integer'
+              }
+            }
+          },
+          userImpactStats: {
+            type: 'object',
+            description: 'User impact statistics (only present when type=userImpact)',
+            nullable: true,
+            properties: {
+              topUsers: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/CountStatistic'
+                }
+              },
+              totalUniqueUsers: {
+                type: 'integer'
+              },
+              totalAlerts: {
+                type: 'integer'
+              },
+              usersWithMultipleAlerts: {
+                type: 'integer'
+              },
+              usersWithCriticalAlerts: {
+                type: 'integer'
+              }
+            }
+          },
+          ipThreatStats: {
+            type: 'object',
+            description: 'IP threat statistics (only present when type=ipThreats)',
+            nullable: true,
+            properties: {
+              topThreatIps: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/CountStatistic'
+                }
+              },
+              topDomains: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/CountStatistic'
+                }
+              },
+              totalUniqueIps: {
+                type: 'integer'
+              },
+              totalUniqueDomains: {
+                type: 'integer'
+              },
+              totalAlerts: {
+                type: 'integer'
+              },
+              ipsWithMultipleAlerts: {
+                type: 'integer'
+              }
+            }
+          },
+          attackTypeStats: {
+            type: 'object',
+            description: 'Attack type statistics (only present when type=attackTypes)',
+            nullable: true,
+            properties: {
+              bySeverity: {
+                type: 'object',
+                properties: {
+                  critical: {
+                    type: 'integer'
+                  },
+                  high: {
+                    type: 'integer'
+                  },
+                  medium: {
+                    type: 'integer'
+                  },
+                  low: {
+                    type: 'integer'
+                  },
+                  informational: {
+                    type: 'integer'
+                  },
+                  total: {
+                    type: 'integer'
+                  }
+                }
+              },
+              byCategory: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/CountStatistic'
+                }
+              },
+              byMitreTechnique: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/CountStatistic'
+                }
+              },
+              byThreatFamily: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/CountStatistic'
+                }
+              },
+              byStatus: {
+                type: 'object',
+                properties: {
+                  new: {
+                    type: 'integer'
+                  },
+                  inProgress: {
+                    type: 'integer'
+                  },
+                  resolved: {
+                    type: 'integer'
+                  },
+                  total: {
+                    type: 'integer'
+                  }
+                }
+              }
+            }
+          },
+          processingInfo: {
+            type: 'object',
+            properties: {
+              totalAlertsProcessed: {
+                type: 'integer',
+                description: 'Total number of alerts processed for this statistics'
+              },
+              processingTimeMs: {
+                type: 'integer',
+                description: 'Processing time in milliseconds'
+              },
+              isInitialRun: {
+                type: 'boolean',
+                description: 'Whether this was the initial run processing all historical data'
+              },
+              lastProcessedAlertDate: {
+                type: 'string',
+                format: 'date-time',
+                nullable: true,
+                description: 'Date of the last alert processed'
+              }
+            }
+          }
+        },
+        required: ['id', 'periodStartDate', 'type', 'period', 'generatedAt', 'processingInfo']
+      },
+      CountStatistic: {
+        type: 'object',
+        description: 'Count statistic with value, count, and percentage',
+        properties: {
+          value: {
+            type: 'string',
+            description: 'The dimension value (e.g., user UPN, IP address, MITRE technique)'
+          },
+          count: {
+            type: 'integer',
+            description: 'Number of occurrences',
+            minimum: 0
+          },
+          percentage: {
+            type: 'number',
+            format: 'float',
+            description: 'Percentage of total (0-100)',
+            minimum: 0,
+            maximum: 100
+          }
+        },
+        required: ['value', 'count', 'percentage']
       }
     }
   }
