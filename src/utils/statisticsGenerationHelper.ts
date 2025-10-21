@@ -32,8 +32,13 @@ export interface StatisticsGenerationResult {
 /**
  * Execute the complete statistics generation workflow
  * Determines run type, period, and generates all statistics
+ *
+ * @param targetDate - Optional date string in YYYY-MM-DD format. If provided, generates statistics for that specific day.
+ *                     If not provided, defaults to today (current behavior).
  */
-export async function executeStatisticsGeneration(): Promise<StatisticsGenerationResult> {
+export async function executeStatisticsGeneration(
+  targetDate?: string
+): Promise<StatisticsGenerationResult> {
   const startTime = Date.now();
 
   try {
@@ -41,13 +46,14 @@ export async function executeStatisticsGeneration(): Promise<StatisticsGeneratio
     const isInitialRun = await checkIfInitialRun();
 
     const period = isInitialRun
-      ? determineInitialRunPeriod()
-      : determineDailyPeriod();
+      ? determineInitialRunPeriod(targetDate)
+      : determineDailyPeriod(targetDate);
 
     logger.info('[Statistics Generation] Processing period determined', {
       isInitialRun,
       period,
-      periodType: period.periodType
+      periodType: period.periodType,
+      targetDate: targetDate || 'today'
     });
 
     // Generate statistics for all types
@@ -131,18 +137,24 @@ async function checkIfInitialRun(): Promise<boolean> {
  * or use a separate backfill script that processes each day individually
  *
  * SECURITY: Robust date handling with validation to prevent edge cases
+ *
+ * @param targetDate - Optional date string in YYYY-MM-DD format. If provided, generates statistics for that specific day.
  */
-function determineInitialRunPeriod(): StatisticsPeriod {
+function determineInitialRunPeriod(targetDate?: string): StatisticsPeriod {
   // Initial run now processes current day (same as daily run)
   // This ensures UPSERT pattern works correctly with ID format: {type}_{YYYY-MM-DD}
-  const now = new Date();
+
+  // If targetDate provided, use that; otherwise use current date
+  const now = targetDate
+    ? parseDateString(targetDate)
+    : new Date();
 
   // SECURITY: Validate current time is valid
   if (isNaN(now.getTime())) {
     throw new ServiceError('System time is invalid - cannot determine period');
   }
 
-  // Start of current day (00:00:00.000 UTC)
+  // Start of target day (00:00:00.000 UTC)
   // Using Date.UTC for precision and avoiding DST/timezone issues
   const startOfDay = new Date(Date.UTC(
     now.getUTCFullYear(),
@@ -151,7 +163,7 @@ function determineInitialRunPeriod(): StatisticsPeriod {
     0, 0, 0, 0
   ));
 
-  // End of current day (23:59:59.999 UTC)
+  // End of target day (23:59:59.999 UTC)
   // Use 86400000ms (24 hours) - 1ms for precision
   const endOfDay = new Date(startOfDay.getTime() + 86400000 - 1);
 
@@ -171,11 +183,12 @@ function determineInitialRunPeriod(): StatisticsPeriod {
     throw new ServiceError('Generated period dates are invalid - ISO format validation failed');
   }
 
-  logger.info('[Statistics Generation] Initial run period determined (current day only)', {
+  logger.info('[Statistics Generation] Initial run period determined', {
     startDate,
     endDate,
     periodType: 'daily',
-    note: 'Initial run processes current day to enable UPSERT pattern. For historical backfill, process each day separately.'
+    targetDate: targetDate || 'today',
+    note: 'Initial run processes target day to enable UPSERT pattern. For historical backfill, process each day separately.'
   });
 
   return {
@@ -191,16 +204,21 @@ function determineInitialRunPeriod(): StatisticsPeriod {
  * This ensures statistics always cover the complete day, enabling proper UPSERT
  *
  * SECURITY: Robust date handling with validation to prevent edge cases
+ *
+ * @param targetDate - Optional date string in YYYY-MM-DD format. If provided, generates statistics for that specific day.
  */
-function determineDailyPeriod(): StatisticsPeriod {
-  const now = new Date();
+function determineDailyPeriod(targetDate?: string): StatisticsPeriod {
+  // If targetDate provided, use that; otherwise use current date
+  const now = targetDate
+    ? parseDateString(targetDate)
+    : new Date();
 
   // SECURITY: Validate current time is valid
   if (isNaN(now.getTime())) {
     throw new ServiceError('System time is invalid - cannot determine period');
   }
 
-  // Start of current day (00:00:00.000 UTC)
+  // Start of target day (00:00:00.000 UTC)
   // Using Date.UTC for precision and avoiding DST/timezone issues
   const startOfDay = new Date(Date.UTC(
     now.getUTCFullYear(),
@@ -209,7 +227,7 @@ function determineDailyPeriod(): StatisticsPeriod {
     0, 0, 0, 0
   ));
 
-  // End of current day (23:59:59.999 UTC)
+  // End of target day (23:59:59.999 UTC)
   // Use 86400000ms (24 hours) - 1ms for precision
   // This is more reliable than setUTCHours and handles edge cases
   const endOfDay = new Date(startOfDay.getTime() + 86400000 - 1);
@@ -234,6 +252,7 @@ function determineDailyPeriod(): StatisticsPeriod {
     startDate,
     endDate,
     periodType: 'daily',
+    targetDate: targetDate || 'today',
     note: 'Full day coverage enables UPSERT pattern (same ID per day)'
   });
 
@@ -242,4 +261,16 @@ function determineDailyPeriod(): StatisticsPeriod {
     endDate,
     periodType: 'daily'
   };
+}
+
+/**
+ * Helper function to parse YYYY-MM-DD date string into Date object
+ * Ensures UTC timezone to avoid DST/timezone issues
+ *
+ * @param dateString - Date string in YYYY-MM-DD format
+ * @returns Date object set to midnight UTC of the target date
+ */
+function parseDateString(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }

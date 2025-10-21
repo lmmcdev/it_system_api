@@ -6,6 +6,7 @@ import { describe, it, expect } from '@jest/globals';
 import {
   validateId,
   validateISODate,
+  validateDateString,
   validateSearchText,
   validateFilterArray,
   validatePaginationParams,
@@ -64,6 +65,154 @@ describe('Validator Utilities', () => {
       const invalidDate = '2025-13-45T99:99:99Z';
       const result = validateISODate(invalidDate);
       expect(result.valid).toBe(false);
+    });
+  });
+
+  describe('validateDateString', () => {
+    it('should accept valid date in YYYY-MM-DD format', () => {
+      const result = validateDateString('2025-10-15');
+      expect(result.valid).toBe(true);
+      expect(result.date).toBeDefined();
+      expect(result.date?.toISOString()).toContain('2025-10-15');
+    });
+
+    it('should accept today\'s date', () => {
+      const today = new Date();
+      const dateString = today.toISOString().split('T')[0];
+      const result = validateDateString(dateString);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should accept past dates', () => {
+      const result = validateDateString('2020-01-01');
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject future dates by default', () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateString = tomorrow.toISOString().split('T')[0];
+      const result = validateDateString(dateString);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('future');
+    });
+
+    it('should allow future dates when allowFuture is true', () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateString = tomorrow.toISOString().split('T')[0];
+      const result = validateDateString(dateString, { allowFuture: true });
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject invalid date format', () => {
+      const result = validateDateString('2025/10/15');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('YYYY-MM-DD');
+    });
+
+    it('should reject invalid date format with dashes only', () => {
+      const result = validateDateString('15-10-2025');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('YYYY-MM-DD');
+    });
+
+    it('should reject ISO 8601 format (with time)', () => {
+      const result = validateDateString('2025-10-15T12:00:00Z');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('YYYY-MM-DD');
+    });
+
+    it('should reject invalid month', () => {
+      const result = validateDateString('2025-13-15');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Month');
+    });
+
+    it('should reject invalid day', () => {
+      const result = validateDateString('2025-10-32');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Day');
+    });
+
+    it('should reject invalid date like February 30', () => {
+      const result = validateDateString('2025-02-30');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Invalid date');
+    });
+
+    it('should reject invalid date like February 29 in non-leap year', () => {
+      const result = validateDateString('2025-02-29');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Invalid date');
+    });
+
+    it('should accept February 29 in leap year', () => {
+      const result = validateDateString('2024-02-29');
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject dates before 1900', () => {
+      const result = validateDateString('1899-12-31');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Year');
+    });
+
+    it('should reject dates after 2100', () => {
+      const result = validateDateString('2101-01-01');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Year');
+    });
+
+    it('should reject empty string', () => {
+      const result = validateDateString('');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('required');
+    });
+
+    it('should reject null', () => {
+      const result = validateDateString(null);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('required');
+    });
+
+    it('should reject undefined', () => {
+      const result = validateDateString(undefined);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('required');
+    });
+
+    it('should enforce maxDaysBack limit', () => {
+      const oldDate = new Date();
+      oldDate.setDate(oldDate.getDate() - 91);
+      const dateString = oldDate.toISOString().split('T')[0];
+      const result = validateDateString(dateString, { maxDaysBack: 90 });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('90 days');
+    });
+
+    it('should allow dates within maxDaysBack limit', () => {
+      const recentDate = new Date();
+      recentDate.setDate(recentDate.getDate() - 30);
+      const dateString = recentDate.toISOString().split('T')[0];
+      const result = validateDateString(dateString, { maxDaysBack: 90 });
+      expect(result.valid).toBe(true);
+    });
+
+    it('should handle edge case: exactly maxDaysBack ago', () => {
+      const oldDate = new Date();
+      oldDate.setDate(oldDate.getDate() - 90);
+      const dateString = oldDate.toISOString().split('T')[0];
+      const result = validateDateString(dateString, { maxDaysBack: 90 });
+      expect(result.valid).toBe(true);
+    });
+
+    it('should return Date object in UTC', () => {
+      const result = validateDateString('2025-10-15');
+      expect(result.valid).toBe(true);
+      expect(result.date?.getUTCFullYear()).toBe(2025);
+      expect(result.date?.getUTCMonth()).toBe(9); // October is month 9 (0-indexed)
+      expect(result.date?.getUTCDate()).toBe(15);
     });
   });
 

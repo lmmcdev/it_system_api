@@ -243,13 +243,21 @@ GET /statistics/detection-sources?startDate=2025-10-20&topN=5&code=your-key
 ---
 
 ### GET /trigger/generate-statistics
-**Description**: Manually trigger statistics generation for current day
+**Description**: Manually trigger statistics generation for a specific day or current day
 
-**No Parameters Required** (uses current day automatically)
+**Query Parameters**:
+- `date` (optional): Date in YYYY-MM-DD format (e.g., `2025-10-15`)
+  - If not provided, uses **current day** (backward compatible)
+  - Cannot be a future date
+  - Must be a valid date (no Feb 30, etc.)
 
-**Example**:
+**Examples**:
 ```bash
+# Generate for today (default - backward compatible)
 GET /trigger/generate-statistics?code=your-key
+
+# Generate for specific date (historical backfill)
+GET /trigger/generate-statistics?date=2025-10-15&code=your-key
 ```
 
 **Response**:

@@ -640,6 +640,115 @@ export function validateRiskFilters(filters: {
 }
 
 /**
+ * Validates date string in YYYY-MM-DD format
+ * Validates format, date validity, and ensures date is not in the future
+ */
+export function validateDateString(
+  dateString: string | null | undefined,
+  options: {
+    allowFuture?: boolean;
+    maxDaysBack?: number;
+  } = {}
+): {
+  valid: boolean;
+  date?: Date;
+  error?: string;
+} {
+  if (!dateString || typeof dateString !== 'string') {
+    return { valid: false, error: 'Date is required' };
+  }
+
+  // Validate YYYY-MM-DD format
+  const dateFormatRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateFormatRegex.test(dateString)) {
+    return {
+      valid: false,
+      error: 'Date must be in YYYY-MM-DD format (e.g., 2025-10-15)'
+    };
+  }
+
+  // Parse date components
+  const [year, month, day] = dateString.split('-').map(Number);
+
+  // Validate date components
+  if (year < 1900 || year > 2100) {
+    return {
+      valid: false,
+      error: 'Year must be between 1900 and 2100'
+    };
+  }
+
+  if (month < 1 || month > 12) {
+    return {
+      valid: false,
+      error: 'Month must be between 01 and 12'
+    };
+  }
+
+  if (day < 1 || day > 31) {
+    return {
+      valid: false,
+      error: 'Day must be between 01 and 31'
+    };
+  }
+
+  // Create date object and validate it's a real date
+  // Parse as UTC to avoid timezone issues
+  const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+
+  if (isNaN(date.getTime())) {
+    return {
+      valid: false,
+      error: 'Invalid date value'
+    };
+  }
+
+  // Verify the date components match (catches invalid dates like Feb 30)
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return {
+      valid: false,
+      error: 'Invalid date (e.g., February 30 does not exist)'
+    };
+  }
+
+  // Check if date is in the future
+  if (!options.allowFuture) {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    if (date > today) {
+      return {
+        valid: false,
+        error: 'Date cannot be in the future'
+      };
+    }
+  }
+
+  // Check max days back if specified
+  if (options.maxDaysBack !== undefined && options.maxDaysBack > 0) {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const minDate = new Date(today.getTime() - (options.maxDaysBack * 86400000));
+
+    if (date < minDate) {
+      return {
+        valid: false,
+        error: `Date cannot be more than ${options.maxDaysBack} days in the past`
+      };
+    }
+  }
+
+  return {
+    valid: true,
+    date
+  };
+}
+
+/**
  * Validates statistics type parameter
  */
 export function validateStatisticsType(type: string | null | undefined): ValidationResult {
