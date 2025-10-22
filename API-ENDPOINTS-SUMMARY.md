@@ -679,6 +679,106 @@ GET /managed-devices/compliance/non-compliant?pageSize=100&code=your-key
 
 ---
 
+## 🔍 Detected Apps (Microsoft Intune)
+
+### GET /detected-apps/{appId}/devices
+**Description**: Get all managed devices that have a specific detected app installed
+
+**Path Parameters**:
+- `appId`: Detected app ID from Microsoft Graph
+
+**Query Parameters**:
+- `pageSize` (optional): 1-999, default 100
+- `nextLink` (optional): Pagination link from previous response
+
+**Example**:
+```bash
+GET /detected-apps/app-12345/devices?pageSize=50&code=your-key
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "device-uuid",
+        "deviceName": "DESKTOP-ABC123",
+        "userId": "user-uuid",
+        "operatingSystem": "Windows",
+        "osVersion": "10.0.19044",
+        "deviceType": "Desktop",
+        "complianceState": "compliant",
+        "managementState": "managed",
+        "userDisplayName": "John Doe",
+        "userPrincipalName": "john.doe@example.com",
+        "manufacturer": "Microsoft",
+        "model": "Surface Pro",
+        "isEncrypted": true,
+        "enrolledDateTime": "2025-01-01T00:00:00Z",
+        "lastSyncDateTime": "2025-10-22T10:00:00Z"
+      }
+    ],
+    "pagination": {
+      "count": 1,
+      "hasMore": false,
+      "nextLink": null
+    }
+  },
+  "timestamp": "2025-10-22T12:00:00.000Z"
+}
+```
+
+---
+
+## 📋 Device Compliance Policies (Microsoft Intune)
+
+### GET /compliance-policies/{policyId}
+**Description**: Get a specific device compliance policy by ID
+
+**Path Parameters**:
+- `policyId`: Compliance policy ID from Microsoft Graph
+
+**Example**:
+```bash
+GET /compliance-policies/policy-12345?code=your-key
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "@odata.type": "#microsoft.graph.windows10CompliancePolicy",
+    "id": "policy-12345",
+    "displayName": "Windows 10 Security Policy",
+    "description": "Corporate Windows 10 security requirements",
+    "createdDateTime": "2025-01-01T00:00:00Z",
+    "lastModifiedDateTime": "2025-10-22T10:00:00Z",
+    "version": 1,
+    "passwordRequired": true,
+    "passwordMinimumLength": 8,
+    "passwordRequiredType": "alphanumeric",
+    "bitLockerEnabled": true,
+    "secureBootEnabled": true,
+    "codeIntegrityEnabled": true,
+    "osMinimumVersion": "10.0.19041",
+    "defenderEnabled": true,
+    "antivirusRequired": true
+  },
+  "timestamp": "2025-10-22T12:00:00.000Z"
+}
+```
+
+**Supported Policy Types**:
+- `#microsoft.graph.windows10CompliancePolicy`
+- `#microsoft.graph.androidCompliancePolicy`
+- `#microsoft.graph.iosCompliancePolicy`
+- `#microsoft.graph.macOSCompliancePolicy`
+
+---
+
 ## 📚 Documentation Links
 
 - **Swagger UI**: `http://localhost:7071/api/swagger`
@@ -690,4 +790,4 @@ GET /managed-devices/compliance/non-compliant?pageSize=100&code=your-key
 
 **Last Updated**: 2025-10-22
 **API Version**: 1.0
-**Total Endpoints**: 20 (19 HTTP + 1 Timer)
+**Total Endpoints**: 22 (21 HTTP + 1 Timer)
