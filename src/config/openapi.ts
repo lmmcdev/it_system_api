@@ -44,6 +44,10 @@ export const openApiSpec = {
     {
       name: 'Documentation',
       description: 'API documentation endpoints'
+    },
+    {
+      name: 'Managed Devices',
+      description: 'Operations for Microsoft Intune managed devices via Graph API'
     }
   ],
   paths: {
@@ -1579,6 +1583,419 @@ export const openApiSpec = {
           }
         }
       }
+    },
+    '/managed-devices': {
+      get: {
+        tags: ['Managed Devices'],
+        summary: 'Get all managed devices',
+        description: 'Retrieves managed devices from Microsoft Intune via Microsoft Graph API with optional filters',
+        operationId: 'getAllManagedDevices',
+        parameters: [
+          {
+            name: 'userId',
+            in: 'query',
+            description: 'Filter by user ID',
+            schema: {
+              type: 'string',
+              example: 'user@example.com'
+            }
+          },
+          {
+            name: 'operatingSystem',
+            in: 'query',
+            description: 'Filter by operating system',
+            schema: {
+              type: 'string',
+              enum: ['Windows', 'iOS', 'MacOS', 'Android', 'Linux']
+            }
+          },
+          {
+            name: 'complianceState',
+            in: 'query',
+            description: 'Filter by compliance state',
+            schema: {
+              type: 'string',
+              enum: ['unknown', 'compliant', 'noncompliant', 'conflict', 'error', 'inGracePeriod', 'configManager']
+            }
+          },
+          {
+            name: 'managementState',
+            in: 'query',
+            description: 'Filter by management state',
+            schema: {
+              type: 'string',
+              enum: ['managed', 'retirePending', 'retireFailed', 'wipePending', 'wipeFailed', 'unhealthy', 'deletePending', 'retireIssued', 'wipeIssued', 'wipeCanceled', 'retireCanceled', 'discovered']
+            }
+          },
+          {
+            name: 'enrolledDateStart',
+            in: 'query',
+            description: 'Filter by enrollment date start (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-01-01T00:00:00Z'
+            }
+          },
+          {
+            name: 'enrolledDateEnd',
+            in: 'query',
+            description: 'Filter by enrollment date end (ISO 8601 format)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-12-31T23:59:59Z'
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          },
+          {
+            name: 'nextLink',
+            in: 'query',
+            description: 'Next page link for pagination',
+            schema: {
+              type: 'string'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Managed devices retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            devices: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/ManagedDevice'
+                              }
+                            },
+                            pagination: {
+                              type: 'object',
+                              properties: {
+                                count: {
+                                  type: 'integer'
+                                },
+                                hasMore: {
+                                  type: 'boolean'
+                                },
+                                nextLink: {
+                                  type: 'string',
+                                  nullable: true
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid filter parameters',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/managed-devices/{id}': {
+      get: {
+        tags: ['Managed Devices'],
+        summary: 'Get managed device by ID',
+        description: 'Retrieves a specific managed device from Microsoft Intune by its ID',
+        operationId: 'getManagedDeviceById',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'Device ID (GUID)',
+            schema: {
+              type: 'string',
+              format: 'uuid',
+              example: '6d4ab0e2-3f9a-4c12-b5c8-2a1d9e8f0a3b'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Managed device retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          $ref: '#/components/schemas/ManagedDevice'
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '404': {
+            description: 'Managed device not found',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/managed-devices/user/{userId}': {
+      get: {
+        tags: ['Managed Devices'],
+        summary: 'Get managed devices by user',
+        description: 'Retrieves all managed devices associated with a specific user',
+        operationId: 'getManagedDevicesByUser',
+        parameters: [
+          {
+            name: 'userId',
+            in: 'path',
+            required: true,
+            description: 'User ID or User Principal Name',
+            schema: {
+              type: 'string',
+              example: 'user@example.com'
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'User devices retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            devices: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/ManagedDevice'
+                              }
+                            },
+                            userId: {
+                              type: 'string'
+                            },
+                            count: {
+                              type: 'integer'
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '404': {
+            description: 'User not found or has no devices',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/managed-devices/compliance/non-compliant': {
+      get: {
+        tags: ['Managed Devices'],
+        summary: 'Get non-compliant devices',
+        description: 'Retrieves all managed devices that are not in compliance with organizational policies',
+        operationId: 'getNonCompliantDevices',
+        parameters: [
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Non-compliant devices retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            devices: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/ManagedDevice'
+                              }
+                            },
+                            count: {
+                              type: 'integer',
+                              description: 'Total number of non-compliant devices'
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   components: {
@@ -2365,6 +2782,234 @@ export const openApiSpec = {
           }
         },
         required: ['value', 'count', 'percentage']
+      },
+      ManagedDevice: {
+        type: 'object',
+        description: 'Microsoft Intune Managed Device from Graph API',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'Device ID (GUID)'
+          },
+          userId: {
+            type: 'string',
+            description: 'User ID associated with the device',
+            nullable: true
+          },
+          deviceName: {
+            type: 'string',
+            description: 'Device name',
+            nullable: true
+          },
+          operatingSystem: {
+            type: 'string',
+            description: 'Operating system (Windows, iOS, MacOS, Android, Linux)',
+            nullable: true
+          },
+          osVersion: {
+            type: 'string',
+            description: 'Operating system version',
+            nullable: true
+          },
+          complianceState: {
+            type: 'string',
+            enum: ['unknown', 'compliant', 'noncompliant', 'conflict', 'error', 'inGracePeriod', 'configManager'],
+            description: 'Compliance state',
+            nullable: true
+          },
+          managementState: {
+            type: 'string',
+            enum: ['managed', 'retirePending', 'retireFailed', 'wipePending', 'wipeFailed', 'unhealthy', 'deletePending', 'retireIssued', 'wipeIssued', 'wipeCanceled', 'retireCanceled', 'discovered'],
+            description: 'Management state',
+            nullable: true
+          },
+          enrolledDateTime: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date and time when the device was enrolled',
+            nullable: true
+          },
+          lastSyncDateTime: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Last sync date and time',
+            nullable: true
+          },
+          manufacturer: {
+            type: 'string',
+            description: 'Device manufacturer',
+            nullable: true
+          },
+          model: {
+            type: 'string',
+            description: 'Device model',
+            nullable: true
+          },
+          serialNumber: {
+            type: 'string',
+            description: 'Serial number',
+            nullable: true
+          },
+          imei: {
+            type: 'string',
+            description: 'IMEI (International Mobile Equipment Identity)',
+            nullable: true
+          },
+          meid: {
+            type: 'string',
+            description: 'MEID (Mobile Equipment Identifier)',
+            nullable: true
+          },
+          wiFiMacAddress: {
+            type: 'string',
+            description: 'Wi-Fi MAC address',
+            nullable: true
+          },
+          ethernetMacAddress: {
+            type: 'string',
+            description: 'Ethernet MAC address',
+            nullable: true
+          },
+          azureADDeviceId: {
+            type: 'string',
+            format: 'uuid',
+            description: 'Azure AD device ID',
+            nullable: true
+          },
+          deviceEnrollmentType: {
+            type: 'string',
+            description: 'Device enrollment type',
+            nullable: true
+          },
+          activationLockBypassCode: {
+            type: 'string',
+            description: 'Activation lock bypass code (iOS)',
+            nullable: true
+          },
+          emailAddress: {
+            type: 'string',
+            format: 'email',
+            description: 'User email address',
+            nullable: true
+          },
+          azureADRegistered: {
+            type: 'boolean',
+            description: 'Whether the device is Azure AD registered',
+            nullable: true
+          },
+          deviceRegistrationState: {
+            type: 'string',
+            description: 'Device registration state',
+            nullable: true
+          },
+          deviceCategoryDisplayName: {
+            type: 'string',
+            description: 'Device category display name',
+            nullable: true
+          },
+          isSupervised: {
+            type: 'boolean',
+            description: 'Whether the device is supervised (iOS)',
+            nullable: true
+          },
+          exchangeLastSuccessfulSyncDateTime: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Last successful Exchange sync date/time',
+            nullable: true
+          },
+          exchangeAccessState: {
+            type: 'string',
+            description: 'Exchange access state',
+            nullable: true
+          },
+          exchangeAccessStateReason: {
+            type: 'string',
+            description: 'Exchange access state reason',
+            nullable: true
+          },
+          remoteAssistanceSessionUrl: {
+            type: 'string',
+            format: 'uri',
+            description: 'Remote assistance session URL',
+            nullable: true
+          },
+          remoteAssistanceSessionErrorDetails: {
+            type: 'string',
+            description: 'Remote assistance session error details',
+            nullable: true
+          },
+          isEncrypted: {
+            type: 'boolean',
+            description: 'Whether the device is encrypted',
+            nullable: true
+          },
+          userPrincipalName: {
+            type: 'string',
+            description: 'User principal name',
+            nullable: true
+          },
+          totalStorageSpaceInBytes: {
+            type: 'integer',
+            format: 'int64',
+            description: 'Total storage space in bytes',
+            nullable: true
+          },
+          freeStorageSpaceInBytes: {
+            type: 'integer',
+            format: 'int64',
+            description: 'Free storage space in bytes',
+            nullable: true
+          },
+          managedDeviceName: {
+            type: 'string',
+            description: 'Managed device name',
+            nullable: true
+          },
+          partnerReportedThreatState: {
+            type: 'string',
+            description: 'Partner reported threat state',
+            nullable: true
+          },
+          requireUserEnrollmentApproval: {
+            type: 'boolean',
+            description: 'Whether user enrollment approval is required',
+            nullable: true
+          },
+          managementCertificateExpirationDate: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Management certificate expiration date',
+            nullable: true
+          },
+          iccid: {
+            type: 'string',
+            description: 'ICCID (Integrated Circuit Card Identifier)',
+            nullable: true
+          },
+          udid: {
+            type: 'string',
+            description: 'UDID (Unique Device Identifier) - iOS',
+            nullable: true
+          },
+          notes: {
+            type: 'string',
+            description: 'Notes about the device',
+            nullable: true
+          },
+          deviceHealthAttestationState: {
+            type: 'object',
+            description: 'Device health attestation state',
+            nullable: true
+          },
+          configurationManagerClientEnabledFeatures: {
+            type: 'object',
+            description: 'Configuration Manager client enabled features',
+            nullable: true
+          }
+        },
+        required: ['id']
       }
     }
   }

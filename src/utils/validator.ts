@@ -849,6 +849,132 @@ export function validateTopNParam(
 }
 
 /**
+ * Validates filter object for managed devices queries
+ */
+export function validateManagedDeviceFilters(filters: {
+  complianceState?: string | null;
+  operatingSystem?: string | null;
+  deviceType?: string | null;
+  managementState?: string | null;
+  userId?: string | null;
+}): {
+  valid: boolean;
+  errors?: string[];
+  sanitized?: {
+    complianceState?: string;
+    operatingSystem?: string;
+    deviceType?: string;
+    managementState?: string;
+    userId?: string;
+  };
+} {
+  const errors: string[] = [];
+  const sanitized: {
+    complianceState?: string;
+    operatingSystem?: string;
+    deviceType?: string;
+    managementState?: string;
+    userId?: string;
+  } = {};
+
+  // Validate complianceState
+  if (filters.complianceState) {
+    const complianceStateResult = sanitizeQueryParam(
+      filters.complianceState,
+      30,
+      /^[a-zA-Z]+$/
+    );
+
+    if (!complianceStateResult.isValid) {
+      errors.push(`complianceState: ${complianceStateResult.error}`);
+    } else if (complianceStateResult.value) {
+      const allowedStates = ['unknown', 'compliant', 'noncompliant', 'conflict', 'error', 'ingraceperiod', 'configmanager'];
+      if (!allowedStates.includes(complianceStateResult.value.toLowerCase())) {
+        errors.push(`complianceState: Must be one of ${allowedStates.join(', ')}`);
+      } else {
+        sanitized.complianceState = complianceStateResult.value.toLowerCase();
+      }
+    }
+  }
+
+  // Validate operatingSystem
+  if (filters.operatingSystem) {
+    const osResult = sanitizeQueryParam(
+      filters.operatingSystem,
+      50,
+      /^[a-zA-Z0-9\s.]+$/
+    );
+
+    if (!osResult.isValid) {
+      errors.push(`operatingSystem: ${osResult.error}`);
+    } else if (osResult.value) {
+      // Common OS values: Windows, iOS, macOS, Android, Linux
+      sanitized.operatingSystem = osResult.value;
+    }
+  }
+
+  // Validate deviceType
+  if (filters.deviceType) {
+    const deviceTypeResult = sanitizeQueryParam(
+      filters.deviceType,
+      50,
+      /^[a-zA-Z0-9\s]+$/
+    );
+
+    if (!deviceTypeResult.isValid) {
+      errors.push(`deviceType: ${deviceTypeResult.error}`);
+    } else if (deviceTypeResult.value) {
+      sanitized.deviceType = deviceTypeResult.value;
+    }
+  }
+
+  // Validate managementState
+  if (filters.managementState) {
+    const managementStateResult = sanitizeQueryParam(
+      filters.managementState,
+      30,
+      /^[a-zA-Z]+$/
+    );
+
+    if (!managementStateResult.isValid) {
+      errors.push(`managementState: ${managementStateResult.error}`);
+    } else if (managementStateResult.value) {
+      const allowedStates = [
+        'managed', 'retirepending', 'retirefailed', 'wipepending',
+        'wipefailed', 'unhealthy', 'deletepending', 'retireissued',
+        'wipeissued', 'wipecanceled', 'retirecanceled', 'discovered'
+      ];
+      if (!allowedStates.includes(managementStateResult.value.toLowerCase())) {
+        errors.push(`managementState: Must be one of ${allowedStates.join(', ')}`);
+      } else {
+        sanitized.managementState = managementStateResult.value.toLowerCase();
+      }
+    }
+  }
+
+  // Validate userId
+  if (filters.userId) {
+    const userIdResult = sanitizeQueryParam(
+      filters.userId,
+      200,
+      /^[a-zA-Z0-9\-_@.]+$/
+    );
+
+    if (!userIdResult.isValid) {
+      errors.push(`userId: ${userIdResult.error}`);
+    } else if (userIdResult.value) {
+      sanitized.userId = userIdResult.value;
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors: errors.length > 0 ? errors : undefined,
+    sanitized: Object.keys(sanitized).length > 0 ? sanitized : undefined
+  };
+}
+
+/**
  * Validates filter object for alert statistics queries
  * IMPORTANT: Statistics queries use YYYY-MM-DD format (not full ISO 8601 timestamps)
  * This matches the periodStartDate field format in the database

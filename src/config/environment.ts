@@ -18,6 +18,12 @@ export interface EnvironmentConfig {
     apiKey: string;
     indexName: string;
   };
+  graph: {
+    clientId: string;
+    tenantId: string;
+    clientSecret: string;
+    scope: string;
+  };
   statistics: {
     batchSize: number;
     topNDefault: number;
@@ -65,6 +71,12 @@ export function getEnvironmentConfig(): EnvironmentConfig {
       endpoint: process.env.SEARCH_ENDPOINT!,
       apiKey: process.env.SEARCH_API_KEY!,
       indexName: process.env.SEARCH_INDEX_NAME!
+    },
+    graph: {
+      clientId: process.env.GRAPH_CLIENT_ID || '',
+      tenantId: process.env.GRAPH_TENANT_ID || '',
+      clientSecret: process.env.GRAPH_CLIENT_SECRET || '',
+      scope: process.env.GRAPH_SCOPE || 'https://graph.microsoft.com/.default'
     },
     statistics: {
       batchSize: parseInt(process.env.STATISTICS_BATCH_SIZE || '100', 10),

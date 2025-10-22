@@ -502,6 +502,183 @@ All endpoints return JSON with consistent structure:
 
 ---
 
+## 💻 Managed Devices (Microsoft Intune)
+
+### GET /managed-devices
+**Description**: Get all managed devices with filters and pagination
+
+**Query Parameters**:
+- `complianceState` (optional): `unknown` | `compliant` | `noncompliant` | `conflict` | `error` | `inGracePeriod` | `configManager`
+- `operatingSystem` (optional): Operating system name (e.g., `Windows`, `iOS`, `Android`)
+- `deviceType` (optional): Device type (e.g., `Desktop`, `Phone`, `Tablet`)
+- `managementState` (optional): `managed` | `retirePending` | `wipePending` | `unhealthy` | etc.
+- `userId` (optional): Azure AD user ID
+- `pageSize` (optional): 1-999, default 100
+- `nextLink` (optional): Pagination link from previous response
+
+**Example**:
+```bash
+GET /managed-devices?complianceState=noncompliant&operatingSystem=Windows&pageSize=50&code=your-key
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "device-uuid",
+        "deviceName": "DESKTOP-ABC123",
+        "userId": "user-uuid",
+        "complianceState": "noncompliant",
+        "operatingSystem": "Windows",
+        "osVersion": "10.0.19044",
+        "deviceType": "Desktop",
+        "managementState": "managed",
+        "userDisplayName": "John Doe",
+        "userPrincipalName": "john.doe@example.com",
+        "lastSyncDateTime": "2025-10-22T10:30:00Z",
+        "enrolledDateTime": "2024-01-15T08:00:00Z"
+      }
+    ],
+    "pagination": {
+      "count": 50,
+      "hasMore": true,
+      "nextLink": "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?$skip=50"
+    }
+  },
+  "timestamp": "2025-10-22T12:00:00.000Z"
+}
+```
+
+---
+
+### GET /managed-devices/{id}
+**Description**: Get single managed device by ID
+
+**Path Parameters**:
+- `id`: Device UUID from Microsoft Graph
+
+**Example**:
+```bash
+GET /managed-devices/12345678-1234-1234-1234-123456789abc?code=your-key
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "12345678-1234-1234-1234-123456789abc",
+    "deviceName": "DESKTOP-ABC123",
+    "userId": "user-uuid",
+    "complianceState": "compliant",
+    "operatingSystem": "Windows",
+    "osVersion": "10.0.19044",
+    "manufacturer": "Microsoft Corporation",
+    "model": "Surface Laptop 4",
+    "serialNumber": "ABC123XYZ",
+    "managementState": "managed",
+    "azureADRegistered": true,
+    "azureADDeviceId": "azure-device-id",
+    "isEncrypted": true,
+    "totalStorageSpaceInBytes": 512000000000,
+    "freeStorageSpaceInBytes": 256000000000
+  },
+  "timestamp": "2025-10-22T12:00:00.000Z"
+}
+```
+
+---
+
+### GET /managed-devices/user/{userId}
+**Description**: Get all managed devices for a specific user
+
+**Path Parameters**:
+- `userId`: Azure AD user ID
+
+**Query Parameters**:
+- `pageSize` (optional): 1-999, default 100
+- `nextLink` (optional): Pagination link from previous response
+
+**Example**:
+```bash
+GET /managed-devices/user/87654321-4321-4321-4321-210987654321?code=your-key
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "device-1",
+        "deviceName": "iPhone 13",
+        "userId": "87654321-4321-4321-4321-210987654321",
+        "operatingSystem": "iOS",
+        "osVersion": "16.5"
+      },
+      {
+        "id": "device-2",
+        "deviceName": "MacBook Pro",
+        "userId": "87654321-4321-4321-4321-210987654321",
+        "operatingSystem": "macOS",
+        "osVersion": "13.2"
+      }
+    ],
+    "pagination": {
+      "count": 2,
+      "hasMore": false,
+      "nextLink": null
+    }
+  },
+  "timestamp": "2025-10-22T12:00:00.000Z"
+}
+```
+
+---
+
+### GET /managed-devices/compliance/non-compliant
+**Description**: Get all devices with non-compliant status
+
+**Query Parameters**:
+- `pageSize` (optional): 1-999, default 100
+- `nextLink` (optional): Pagination link from previous response
+
+**Example**:
+```bash
+GET /managed-devices/compliance/non-compliant?pageSize=100&code=your-key
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "device-uuid",
+        "deviceName": "LAPTOP-XYZ789",
+        "complianceState": "noncompliant",
+        "operatingSystem": "Windows",
+        "userDisplayName": "Jane Smith",
+        "complianceGracePeriodExpirationDateTime": "2025-10-25T00:00:00Z"
+      }
+    ],
+    "pagination": {
+      "count": 1,
+      "hasMore": false,
+      "nextLink": null
+    }
+  },
+  "timestamp": "2025-10-22T12:00:00.000Z"
+}
+```
+
+---
+
 ## 📚 Documentation Links
 
 - **Swagger UI**: `http://localhost:7071/api/swagger`
@@ -511,6 +688,6 @@ All endpoints return JSON with consistent structure:
 
 ---
 
-**Last Updated**: 2025-10-21
+**Last Updated**: 2025-10-22
 **API Version**: 1.0
-**Total Endpoints**: 16 (15 HTTP + 1 Timer)
+**Total Endpoints**: 20 (19 HTTP + 1 Timer)
