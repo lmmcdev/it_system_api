@@ -1996,6 +1996,222 @@ export const openApiSpec = {
           }
         }
       }
+    },
+    '/detected-apps/{appId}/devices': {
+      get: {
+        tags: ['Managed Devices'],
+        summary: 'Get devices with detected app',
+        description: 'Retrieves managed devices that have a specific detected application installed',
+        operationId: 'getDetectedAppDevices',
+        parameters: [
+          {
+            name: 'appId',
+            in: 'path',
+            required: true,
+            description: 'Detected App ID (GUID)',
+            schema: {
+              type: 'string',
+              format: 'uuid',
+              example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          },
+          {
+            name: 'nextLink',
+            in: 'query',
+            description: 'Next page link for pagination',
+            schema: {
+              type: 'string'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Devices retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            devices: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/DetectedAppManagedDevice'
+                              }
+                            },
+                            appId: {
+                              type: 'string',
+                              format: 'uuid'
+                            },
+                            pagination: {
+                              type: 'object',
+                              properties: {
+                                count: {
+                                  type: 'integer'
+                                },
+                                hasMore: {
+                                  type: 'boolean'
+                                },
+                                nextLink: {
+                                  type: 'string',
+                                  nullable: true
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid app ID format',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '404': {
+            description: 'Detected app not found',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/compliance-policies/{policyId}': {
+      get: {
+        tags: ['Managed Devices'],
+        summary: 'Get compliance policy by ID',
+        description: 'Retrieves a specific device compliance policy from Microsoft Intune by its ID',
+        operationId: 'getCompliancePolicyById',
+        parameters: [
+          {
+            name: 'policyId',
+            in: 'path',
+            required: true,
+            description: 'Device Compliance Policy ID (GUID)',
+            schema: {
+              type: 'string',
+              format: 'uuid',
+              example: 'b2c3d4e5-f6a7-8901-bcde-f12345678901'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Compliance policy retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          $ref: '#/components/schemas/DeviceCompliancePolicy'
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid policy ID format',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '404': {
+            description: 'Compliance policy not found',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Authentication required',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   components: {
@@ -3006,6 +3222,137 @@ export const openApiSpec = {
           configurationManagerClientEnabledFeatures: {
             type: 'object',
             description: 'Configuration Manager client enabled features',
+            nullable: true
+          }
+        },
+        required: ['id']
+      },
+      DetectedAppManagedDevice: {
+        type: 'object',
+        description: 'Managed Device with detected app from Graph API',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'Device ID (GUID)'
+          },
+          deviceName: {
+            type: 'string',
+            description: 'Device name',
+            nullable: true
+          },
+          userId: {
+            type: 'string',
+            description: 'User ID associated with the device',
+            nullable: true
+          },
+          operatingSystem: {
+            type: 'string',
+            description: 'Operating system (Windows, iOS, MacOS, Android, Linux)',
+            nullable: true
+          },
+          osVersion: {
+            type: 'string',
+            description: 'Operating system version',
+            nullable: true
+          },
+          complianceState: {
+            type: 'string',
+            enum: ['unknown', 'compliant', 'noncompliant', 'conflict', 'error', 'inGracePeriod', 'configManager'],
+            description: 'Compliance state',
+            nullable: true
+          },
+          managementState: {
+            type: 'string',
+            description: 'Management state',
+            nullable: true
+          },
+          enrolledDateTime: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date and time when the device was enrolled',
+            nullable: true
+          },
+          lastSyncDateTime: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Last sync date and time',
+            nullable: true
+          },
+          userPrincipalName: {
+            type: 'string',
+            description: 'User principal name',
+            nullable: true
+          }
+        },
+        required: ['id']
+      },
+      DeviceCompliancePolicy: {
+        type: 'object',
+        description: 'Device Compliance Policy from Microsoft Intune',
+        properties: {
+          '@odata.type': {
+            type: 'string',
+            description: 'OData type identifier (e.g., #microsoft.graph.androidCompliancePolicy)',
+            nullable: true
+          },
+          id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'Policy ID (GUID)'
+          },
+          createdDateTime: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date and time when the policy was created',
+            nullable: true
+          },
+          description: {
+            type: 'string',
+            description: 'Policy description',
+            nullable: true
+          },
+          lastModifiedDateTime: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date and time when the policy was last modified',
+            nullable: true
+          },
+          displayName: {
+            type: 'string',
+            description: 'Display name of the policy',
+            nullable: true
+          },
+          version: {
+            type: 'integer',
+            description: 'Version of the policy',
+            nullable: true
+          },
+          scheduledActionsForRule: {
+            type: 'array',
+            description: 'Scheduled actions for compliance rules',
+            items: {
+              type: 'object',
+              properties: {
+                ruleName: {
+                  type: 'string'
+                },
+                scheduledActionConfigurations: {
+                  type: 'array',
+                  items: {
+                    type: 'object'
+                  }
+                }
+              }
+            },
+            nullable: true
+          },
+          roleScopeTagIds: {
+            type: 'array',
+            description: 'Role scope tag IDs for RBAC',
+            items: {
+              type: 'string'
+            },
             nullable: true
           }
         },
