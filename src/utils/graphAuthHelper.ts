@@ -39,38 +39,42 @@ class GraphAuthHelper {
    * Returns cached token if still valid, otherwise requests a new token
    */
   async getAccessToken(): Promise<string> {
-    try {
-      // Check if we have a cached token that's still valid
-      if (this.cachedToken && this.isTokenValid(this.cachedToken)) {
-        logger.debug('[Graph API] Using cached access token', {
-          expiresAt: new Date(this.cachedToken.expiresAt).toISOString()
-        });
-        return this.cachedToken.accessToken;
-      }
-
-      // Request new token if cache is empty or expired
-      logger.info('[Graph API] Requesting new access token');
-      const tokenResponse = await this.requestNewToken();
-
-      // Calculate expiration time with buffer
-      const expiresAt = Date.now() + (tokenResponse.expires_in * 1000) - this.TOKEN_BUFFER_MS;
-
-      // Cache the token
-      this.cachedToken = {
-        accessToken: tokenResponse.access_token,
-        expiresAt
-      };
-
-      logger.info('[Graph API] Access token acquired successfully', {
-        expiresAt: new Date(expiresAt).toISOString(),
-        expiresInMinutes: Math.floor(tokenResponse.expires_in / 60)
+    // Check if we have a cached token that's still valid
+    if (this.cachedToken && this.isTokenValid(this.cachedToken)) {
+      logger.debug('[Graph API] Using cached access token', {
+        expiresAt: new Date(this.cachedToken.expiresAt).toISOString()
       });
-
       return this.cachedToken.accessToken;
-    } catch (error) {
-      logger.error('[Graph API] Failed to acquire access token', error as Error);
-      throw new ServiceError('Failed to authenticate with Microsoft Graph API');
     }
+
+    // Request new token if cache is empty or expired
+    logger.info('[Graph API] Requesting new access token');
+    const tokenResponse = await this.requestNewToken();
+
+    // Validate token response structure
+    if (!tokenResponse.access_token || !tokenResponse.expires_in) {
+      logger.error('[Graph API] Invalid token response structure', undefined, {
+        hasAccessToken: !!tokenResponse.access_token,
+        hasExpiresIn: !!tokenResponse.expires_in
+      });
+      throw new ServiceError('Invalid token response from Microsoft Identity Platform');
+    }
+
+    // Calculate expiration time with buffer
+    const expiresAt = Date.now() + (tokenResponse.expires_in * 1000) - this.TOKEN_BUFFER_MS;
+
+    // Cache the token
+    this.cachedToken = {
+      accessToken: tokenResponse.access_token,
+      expiresAt
+    };
+
+    logger.info('[Graph API] Access token acquired successfully', {
+      expiresAt: new Date(expiresAt).toISOString(),
+      expiresInMinutes: Math.floor(tokenResponse.expires_in / 60)
+    });
+
+    return this.cachedToken.accessToken;
   }
 
   /**
@@ -108,7 +112,7 @@ class GraphAuthHelper {
         hasTenantId: !!tenantId,
         hasClientSecret: !!clientSecret
       });
-      throw new ServiceError('Microsoft Graph API configuration is incomplete');
+      throw new ServiceError('Graph API credentials not configured');
     }
 
     const tokenEndpoint = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
@@ -158,7 +162,15 @@ class GraphAuthHelper {
         });
 
         if (response.status === 401 || response.status === 403) {
-          throw new ServiceError('Invalid Microsoft Graph API credentials');
+          throw new ServiceError('Microsoft Graph API authentication failed - invalid credentials');
+        }
+
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After');
+          const retryMessage = retryAfter
+            ? ` - retry after ${retryAfter} seconds`
+            : '';
+          throw new ServiceError(`Microsoft Graph API rate limited${retryMessage}`);
         }
 
         throw new ServiceError(`Token request failed with status ${response.status}`);
@@ -178,6 +190,14 @@ class GraphAuthHelper {
 
       if (error instanceof ServiceError) {
         throw error;
+      }
+
+      // Handle network errors specifically
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        logger.error('[Graph API] Network error during token request', error as Error, {
+          executionTime: `${executionTime}ms`
+        });
+        throw new ServiceError('Network error while requesting access token from Microsoft Identity Platform');
       }
 
       logger.error('[Graph API] Token request error', error as Error, {
