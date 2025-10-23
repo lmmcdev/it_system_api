@@ -48,6 +48,10 @@ export const openApiSpec = {
     {
       name: 'Managed Devices',
       description: 'Operations for Microsoft Intune managed devices via Graph API'
+    },
+    {
+      name: 'Vulnerabilities',
+      description: 'Operations for Microsoft Defender vulnerability data'
     }
   ],
   paths: {
@@ -2614,6 +2618,382 @@ export const openApiSpec = {
           }
         }
       }
+    },
+    '/vulnerabilities': {
+      get: {
+        tags: ['Vulnerabilities'],
+        summary: 'Get all vulnerabilities',
+        description: 'Retrieves all vulnerabilities from Microsoft Defender with optional filtering and pagination',
+        operationId: 'getAllVulnerabilities',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        parameters: [
+          {
+            name: 'name',
+            in: 'query',
+            description: 'Filter by vulnerability name (partial match, case-insensitive)',
+            schema: {
+              type: 'string',
+              example: 'CVE-2024'
+            }
+          },
+          {
+            name: 'severity',
+            in: 'query',
+            description: 'Filter by severity (comma-separated for multiple values)',
+            schema: {
+              type: 'string',
+              example: 'High,Critical'
+            }
+          },
+          {
+            name: 'updatedOnFrom',
+            in: 'query',
+            description: 'Filter by minimum update date (ISO 8601)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2024-10-01T00:00:00Z'
+            }
+          },
+          {
+            name: 'updatedOnTo',
+            in: 'query',
+            description: 'Filter by maximum update date (ISO 8601)',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2024-10-31T23:59:59Z'
+            }
+          },
+          {
+            name: 'top',
+            in: 'query',
+            description: 'Number of items per page (max 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50
+            }
+          },
+          {
+            name: 'continuationToken',
+            in: 'query',
+            description: 'Continuation token for pagination',
+            schema: {
+              type: 'string'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Vulnerabilities retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            items: {
+                              type: 'array',
+                              items: {
+                                $ref: '#/components/schemas/VulnerabilityDefender'
+                              }
+                            },
+                            pagination: {
+                              $ref: '#/components/schemas/PaginationInfo'
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            $ref: '#/components/responses/BadRequest'
+          },
+          '401': {
+            $ref: '#/components/responses/Unauthorized'
+          },
+          '500': {
+            $ref: '#/components/responses/InternalServerError'
+          }
+        }
+      },
+      post: {
+        tags: ['Vulnerabilities'],
+        summary: 'Create vulnerability',
+        description: 'Creates a new vulnerability record in CosmosDB',
+        operationId: 'createVulnerability',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CreateVulnerabilityRequest'
+              }
+            }
+          }
+        },
+        responses: {
+          '201': {
+            description: 'Vulnerability created successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          $ref: '#/components/schemas/VulnerabilityDefender'
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            $ref: '#/components/responses/BadRequest'
+          },
+          '401': {
+            $ref: '#/components/responses/Unauthorized'
+          },
+          '409': {
+            $ref: '#/components/responses/Conflict'
+          },
+          '500': {
+            $ref: '#/components/responses/InternalServerError'
+          }
+        }
+      }
+    },
+    '/vulnerabilities/{id}': {
+      get: {
+        tags: ['Vulnerabilities'],
+        summary: 'Get vulnerability by ID',
+        description: 'Retrieves a specific vulnerability by its ID',
+        operationId: 'getVulnerabilityById',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'Vulnerability ID (UUID)',
+            schema: {
+              type: 'string',
+              format: 'uuid'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Vulnerability retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          $ref: '#/components/schemas/VulnerabilityDefender'
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            $ref: '#/components/responses/BadRequest'
+          },
+          '401': {
+            $ref: '#/components/responses/Unauthorized'
+          },
+          '404': {
+            $ref: '#/components/responses/NotFound'
+          },
+          '500': {
+            $ref: '#/components/responses/InternalServerError'
+          }
+        }
+      },
+      put: {
+        tags: ['Vulnerabilities'],
+        summary: 'Update vulnerability',
+        description: 'Updates an existing vulnerability record',
+        operationId: 'updateVulnerability',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'Vulnerability ID (UUID)',
+            schema: {
+              type: 'string',
+              format: 'uuid'
+            }
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/UpdateVulnerabilityRequest'
+              }
+            }
+          }
+        },
+        responses: {
+          '200': {
+            description: 'Vulnerability updated successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      $ref: '#/components/schemas/SuccessResponse'
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        data: {
+                          $ref: '#/components/schemas/VulnerabilityDefender'
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          '400': {
+            $ref: '#/components/responses/BadRequest'
+          },
+          '401': {
+            $ref: '#/components/responses/Unauthorized'
+          },
+          '404': {
+            $ref: '#/components/responses/NotFound'
+          },
+          '409': {
+            $ref: '#/components/responses/Conflict'
+          },
+          '500': {
+            $ref: '#/components/responses/InternalServerError'
+          }
+        }
+      },
+      delete: {
+        tags: ['Vulnerabilities'],
+        summary: 'Delete vulnerability',
+        description: 'Deletes a vulnerability record from CosmosDB',
+        operationId: 'deleteVulnerability',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'Vulnerability ID (UUID)',
+            schema: {
+              type: 'string',
+              format: 'uuid'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Vulnerability deleted successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: {
+                      type: 'boolean',
+                      example: true
+                    },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        message: {
+                          type: 'string',
+                          example: 'Vulnerability deleted successfully'
+                        },
+                        id: {
+                          type: 'string',
+                          format: 'uuid'
+                        }
+                      }
+                    },
+                    timestamp: {
+                      type: 'string',
+                      format: 'date-time'
+                    }
+                  }
+                }
+              }
+            }
+          },
+          '400': {
+            $ref: '#/components/responses/BadRequest'
+          },
+          '401': {
+            $ref: '#/components/responses/Unauthorized'
+          },
+          '404': {
+            $ref: '#/components/responses/NotFound'
+          },
+          '500': {
+            $ref: '#/components/responses/InternalServerError'
+          }
+        }
+      }
     }
   },
   components: {
@@ -3759,6 +4139,371 @@ export const openApiSpec = {
           }
         },
         required: ['id']
+      },
+      VulnerabilityDefender: {
+        type: 'object',
+        description: 'Microsoft Defender vulnerability data',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'Document ID (partition key)'
+          },
+          name: {
+            type: 'string',
+            description: 'Vulnerability name (e.g., CVE-2024-1234)'
+          },
+          description: {
+            type: 'string',
+            description: 'Vulnerability description',
+            nullable: true
+          },
+          severity: {
+            type: 'string',
+            enum: ['Low', 'Medium', 'High', 'Critical'],
+            description: 'Severity level'
+          },
+          cvssV3: {
+            type: 'number',
+            format: 'float',
+            minimum: 0,
+            maximum: 10,
+            description: 'CVSS v3 score',
+            nullable: true
+          },
+          exploitabilityLevel: {
+            type: 'string',
+            description: 'Exploitability level',
+            nullable: true
+          },
+          exploitTypes: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            description: 'Types of exploits',
+            nullable: true
+          },
+          exploitUris: {
+            type: 'array',
+            items: {
+              type: 'string',
+              format: 'uri'
+            },
+            description: 'URIs to exploit information',
+            nullable: true
+          },
+          exploitVerified: {
+            type: 'boolean',
+            description: 'Whether exploit is verified',
+            nullable: true
+          },
+          publicExploit: {
+            type: 'boolean',
+            description: 'Whether public exploit exists',
+            nullable: true
+          },
+          exploitInKit: {
+            type: 'boolean',
+            description: 'Whether exploit is in a kit',
+            nullable: true
+          },
+          hasExploit: {
+            type: 'boolean',
+            description: 'Whether any exploit exists',
+            nullable: true
+          },
+          publishedOn: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date vulnerability was published',
+            nullable: true
+          },
+          updatedOn: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date vulnerability was last updated'
+          },
+          weaknesses: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            description: 'CWE weaknesses',
+            nullable: true
+          },
+          references: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            description: 'Reference URLs and identifiers',
+            nullable: true
+          },
+          relatedComponent: {
+            type: 'string',
+            description: 'Related software component',
+            nullable: true
+          },
+          cvssV3Vector: {
+            type: 'string',
+            description: 'CVSS v3 vector string',
+            nullable: true
+          },
+          cvssV3Base: {
+            type: 'number',
+            format: 'float',
+            description: 'CVSS v3 base score',
+            nullable: true
+          },
+          cvssV3Temporal: {
+            type: 'number',
+            format: 'float',
+            description: 'CVSS v3 temporal score',
+            nullable: true
+          },
+          cvssV3Environmental: {
+            type: 'number',
+            format: 'float',
+            description: 'CVSS v3 environmental score',
+            nullable: true
+          },
+          _rid: {
+            type: 'string',
+            description: 'CosmosDB resource ID',
+            nullable: true
+          },
+          _etag: {
+            type: 'string',
+            description: 'CosmosDB entity tag',
+            nullable: true
+          },
+          _ts: {
+            type: 'integer',
+            description: 'CosmosDB timestamp',
+            nullable: true
+          }
+        },
+        required: ['id', 'name', 'severity', 'updatedOn']
+      },
+      CreateVulnerabilityRequest: {
+        type: 'object',
+        description: 'Request body for creating a vulnerability',
+        properties: {
+          name: {
+            type: 'string',
+            description: 'Vulnerability name (e.g., CVE-2024-1234)'
+          },
+          description: {
+            type: 'string',
+            description: 'Vulnerability description',
+            nullable: true
+          },
+          severity: {
+            type: 'string',
+            enum: ['Low', 'Medium', 'High', 'Critical'],
+            description: 'Severity level'
+          },
+          cvssV3: {
+            type: 'number',
+            format: 'float',
+            minimum: 0,
+            maximum: 10,
+            description: 'CVSS v3 score',
+            nullable: true
+          },
+          exploitabilityLevel: {
+            type: 'string',
+            nullable: true
+          },
+          exploitTypes: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            nullable: true
+          },
+          exploitUris: {
+            type: 'array',
+            items: {
+              type: 'string',
+              format: 'uri'
+            },
+            nullable: true
+          },
+          exploitVerified: {
+            type: 'boolean',
+            nullable: true
+          },
+          publicExploit: {
+            type: 'boolean',
+            nullable: true
+          },
+          exploitInKit: {
+            type: 'boolean',
+            nullable: true
+          },
+          hasExploit: {
+            type: 'boolean',
+            nullable: true
+          },
+          publishedOn: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true
+          },
+          updatedOn: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date vulnerability was last updated'
+          },
+          weaknesses: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            nullable: true
+          },
+          references: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            nullable: true
+          },
+          relatedComponent: {
+            type: 'string',
+            nullable: true
+          },
+          cvssV3Vector: {
+            type: 'string',
+            nullable: true
+          },
+          cvssV3Base: {
+            type: 'number',
+            format: 'float',
+            nullable: true
+          },
+          cvssV3Temporal: {
+            type: 'number',
+            format: 'float',
+            nullable: true
+          },
+          cvssV3Environmental: {
+            type: 'number',
+            format: 'float',
+            nullable: true
+          }
+        },
+        required: ['name', 'severity', 'updatedOn']
+      },
+      UpdateVulnerabilityRequest: {
+        type: 'object',
+        description: 'Request body for updating a vulnerability (all fields optional)',
+        properties: {
+          name: {
+            type: 'string',
+            nullable: true
+          },
+          description: {
+            type: 'string',
+            nullable: true
+          },
+          severity: {
+            type: 'string',
+            enum: ['Low', 'Medium', 'High', 'Critical'],
+            nullable: true
+          },
+          cvssV3: {
+            type: 'number',
+            format: 'float',
+            minimum: 0,
+            maximum: 10,
+            nullable: true
+          },
+          exploitabilityLevel: {
+            type: 'string',
+            nullable: true
+          },
+          exploitTypes: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            nullable: true
+          },
+          exploitUris: {
+            type: 'array',
+            items: {
+              type: 'string',
+              format: 'uri'
+            },
+            nullable: true
+          },
+          exploitVerified: {
+            type: 'boolean',
+            nullable: true
+          },
+          publicExploit: {
+            type: 'boolean',
+            nullable: true
+          },
+          exploitInKit: {
+            type: 'boolean',
+            nullable: true
+          },
+          hasExploit: {
+            type: 'boolean',
+            nullable: true
+          },
+          publishedOn: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true
+          },
+          updatedOn: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true
+          },
+          weaknesses: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            nullable: true
+          },
+          references: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            nullable: true
+          },
+          relatedComponent: {
+            type: 'string',
+            nullable: true
+          },
+          cvssV3Vector: {
+            type: 'string',
+            nullable: true
+          },
+          cvssV3Base: {
+            type: 'number',
+            format: 'float',
+            nullable: true
+          },
+          cvssV3Temporal: {
+            type: 'number',
+            format: 'float',
+            nullable: true
+          },
+          cvssV3Environmental: {
+            type: 'number',
+            format: 'float',
+            nullable: true
+          }
+        }
       }
     }
   }

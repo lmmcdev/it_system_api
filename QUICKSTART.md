@@ -30,16 +30,22 @@ Edit `E:\it_system_api\local.settings.json`:
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "COSMOS_ENDPOINT": "https://YOUR-ACCOUNT.documents.azure.com:443/",
     "COSMOS_KEY": "YOUR-COSMOS-KEY",
-    "COSMOS_DATABASE_ID": "it-system-db",
-    "COSMOS_CONTAINER_ID": "it-system",
+    "COSMOS_DATABASE_ID": "it-system",
+    "COSMOS_CONTAINER_ALERT": "alert_events",
+    "COSMOS_CONTAINER_RISK_DETECTION": "risk_detection_events",
+    "COSMOS_CONTAINER_ALERT_STATISTICS": "alerts_statistics",
+    "COSMOS_CONTAINER_DEVICES_INTUNE": "devices_intune",
+    "COSMOS_CONTAINER_DEVICES_DEFENDER": "devices_defender",
+    "COSMOS_CONTAINER_VULNERABILITIES_DEFENDER": "vulnerabilities_defender",
     "SEARCH_ENDPOINT": "https://YOUR-SEARCH.search.windows.net",
     "SEARCH_API_KEY": "YOUR-SEARCH-KEY",
-    "SEARCH_INDEX_NAME": "it-systems-index",
+    "SEARCH_INDEX_NAME": "alerts-index",
+    "FUNCTION_KEY": "your-function-key",
     "NODE_ENV": "development",
     "LOG_LEVEL": "info"
   },
   "Host": {
-    "LocalHttpPort": 7071,
+    "LocalHttpPort": 7081,
     "CORS": "*"
   }
 }
@@ -234,9 +240,39 @@ Import this collection to test all endpoints:
 
 ## Troubleshooting Quick Fixes
 
+### Error: "No job functions found" or "No HTTP routes mapped"
+
+**Symptom**: Functions runtime starts but shows:
+```
+[2025-10-23T15:17:45.184Z] Generating 0 job function(s)
+[2025-10-23T15:17:45.184Z] No job functions found...
+[2025-10-23T15:17:45.190Z] No HTTP routes mapped
+```
+
+**Root Cause**: Missing required environment variable prevents ALL functions from loading.
+
+**Fix**:
+1. Check verbose logs: `func start --verbose` to see which variable is missing
+2. Add missing variable to `local.settings.json`
+3. Most commonly missing: `COSMOS_CONTAINER_VULNERABILITIES_DEFENDER`
+4. See `TROUBLESHOOTING-FUNCTIONS-NOT-LOADING.md` for complete guide
+
+**Required Variables Checklist**:
+- `COSMOS_ENDPOINT`
+- `COSMOS_KEY`
+- `COSMOS_DATABASE_ID`
+- `COSMOS_CONTAINER_ALERT`
+- `COSMOS_CONTAINER_RISK_DETECTION`
+- `COSMOS_CONTAINER_DEVICES_INTUNE`
+- `COSMOS_CONTAINER_DEVICES_DEFENDER`
+- `COSMOS_CONTAINER_VULNERABILITIES_DEFENDER` ← Often forgotten!
+- `SEARCH_ENDPOINT`
+- `SEARCH_API_KEY`
+- `SEARCH_INDEX_NAME`
+
 ### Error: "Missing required environment variables"
 
-**Fix**: Check `local.settings.json` has all required variables set.
+**Fix**: Check `local.settings.json` has all required variables set (see checklist above).
 
 ### Error: "Failed to initialize database connection"
 

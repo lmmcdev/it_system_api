@@ -224,6 +224,24 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
   swagger: {
     windowMs: 60000,        // 1 minute
     maxRequests: 20         // 20 requests per minute
+  },
+
+  // Create operations (write operation, moderate limit)
+  create: {
+    windowMs: 60000,        // 1 minute
+    maxRequests: 100        // 100 requests per minute
+  },
+
+  // Update operations (write operation, moderate limit)
+  update: {
+    windowMs: 60000,        // 1 minute
+    maxRequests: 150        // 150 requests per minute
+  },
+
+  // Delete operations (destructive, lower limit)
+  delete: {
+    windowMs: 60000,        // 1 minute
+    maxRequests: 50         // 50 requests per minute
   }
 };
 
