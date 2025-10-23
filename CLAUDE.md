@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Alert Events API - Azure Functions TypeScript project for managing Security Alert Events from Microsoft Graph Security API with CosmosDB storage and Azure Cognitive Search integration.
+Alert Events API - Azure Functions TypeScript project for managing:
+- Security Alert Events from Microsoft Graph Security API
+- Managed Devices (Intune) from Microsoft Graph Device Management API
+- CosmosDB storage with Azure Cognitive Search integration
+- Automated synchronization with timer triggers
 
 ## Development Commands
 
@@ -219,17 +223,178 @@ Azure Search filters use OData syntax:
 - Prefix log messages with operation type:
   - `[CosmosDB]` - Database operations
   - `[Azure Search]` - Search operations
+  - `[Graph API]` - Microsoft Graph API calls
+  - `[ManagedDevices Sync]` - Device synchronization operations
   - `[CosmosDB Query Trace]` - Query execution details
   - `[Azure Search Query Trace]` - Search execution details
+  - `[Graph API Query Trace]` - Graph API call details
 - Always log execution time, request charges (RU), item counts for data operations
 - Set/clear logger context in function handlers
+
+## Managed Device Synchronization
+
+### Overview
+Automatic synchronization of managed devices from Microsoft Graph API to CosmosDB:
+- **Timer Trigger**: Runs every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
+- **Manual Trigger**: HTTP endpoint `/trigger/sync-managed-devices`
+- **Target**: ~2000 devices from Microsoft Intune
+- **Performance**: < 5 minutes for full sync
+
+### Architecture
+```
+┌──────────────────────────────────────────────────┐
+│  syncManagedDevicesTimer (Timer Trigger)         │
+│  triggerSyncManagedDevices (HTTP Trigger)        │
+└────────────────┬─────────────────────────────────┘
+                 │
+                 v
+┌──────────────────────────────────────────────────┐
+│  ManagedDeviceSyncService                        │
+│  - Orchestrates full sync workflow               │
+│  - Tracks progress and errors                    │
+│  - Updates sync metadata                         │
+└────────────┬──────────────┬──────────────────────┘
+             │              │
+             v              v
+┌─────────────────────┐  ┌──────────────────────────┐
+│ ManagedDevice       │  │ ManagedDeviceCosmos      │
+│ Repository          │  │ Repository               │
+│ (Graph API Read)    │  │ (CosmosDB Write)         │
+└─────────────────────┘  └──────────────────────────┘
+```
+
+### Key Components
+
+1. **ManagedDeviceRepository** (`src/repositories/ManagedDeviceRepository.ts`)
+   - Reads from Microsoft Graph API: `/deviceManagement/managedDevices`
+   - Handles pagination with `@odata.nextLink`
+   - Method: `getAllDevicesPaginated()` - fetches all devices
+
+2. **ManagedDeviceCosmosRepository** (`src/repositories/ManagedDeviceCosmosRepository.ts`)
+   - Writes to CosmosDB container: `devices_intune`
+   - Methods:
+     - `upsertDevice()` - Single device UPSERT
+     - `bulkUpsertDevices()` - Batch UPSERT (100 devices per batch)
+     - `getSyncMetadata()` - Retrieve sync status
+     - `updateSyncMetadata()` - Update sync tracking
+   - Features:
+     - Exponential backoff retry on 429 throttling
+     - Bulk operations for performance
+     - Comprehensive error tracking
+
+3. **ManagedDeviceSyncService** (`src/services/ManagedDeviceSyncService.ts`)
+   - Orchestrates full sync workflow
+   - Phase 1: Fetch all devices from Graph API
+   - Phase 2: Batch upsert to CosmosDB (100 devices/batch)
+   - Phase 3: Update sync metadata
+   - Error handling: Continues on partial failures
+   - Progress callbacks for monitoring
+
+4. **SyncMetadata Model** (`src/models/SyncMetadata.ts`)
+   - Singleton document (id: `sync_metadata`)
+   - Tracks:
+     - Last sync time and status
+     - Devices processed/failed counts
+     - Graph API and CosmosDB metrics
+     - Individual device errors (last 100)
+
+### Sync Process Flow
+
+```
+1. Timer/Manual Trigger Initiates
+   ↓
+2. Fetch Previous Sync Metadata
+   ↓
+3. Fetch All Devices from Graph API (with pagination)
+   ↓
+4. Create Batches (100 devices each)
+   ↓
+5. For Each Batch:
+   - Bulk UPSERT to CosmosDB
+   - Track success/failure
+   - Log RU consumption
+   - Continue on errors
+   ↓
+6. Calculate Final Status (success/partial/failed)
+   ↓
+7. Update Sync Metadata
+   ↓
+8. Return Results
+```
+
+### Environment Variables
+
+Required in `local.settings.json` or Azure App Settings:
+```json
+{
+  "COSMOS_CONTAINER_DEVICES_INTUNE": "devices_intune",
+  "DEVICE_SYNC_BATCH_SIZE": "100",
+  "DEVICE_SYNC_TIMER_SCHEDULE": "0 0 */6 * * *",
+  "GRAPH_CLIENT_ID": "your-client-id",
+  "GRAPH_TENANT_ID": "your-tenant-id",
+  "GRAPH_CLIENT_SECRET": "your-client-secret"
+}
+```
+
+### Error Handling Strategy
+
+1. **Graph API Errors**:
+   - 429 Throttling: Handled by repository with `Retry-After` header
+   - Network errors: Logged and fail sync
+   - 401/403: Authentication failure, fail immediately
+
+2. **CosmosDB Errors**:
+   - 429 Throttling: Exponential backoff retry (max 3 attempts)
+   - 409 Conflict: Logged (shouldn't occur with UPSERT)
+   - Individual device failures: Track and continue
+
+3. **Service Level**:
+   - Partial failures: Mark sync as `partial` status
+   - Complete failures: Mark sync as `failed` status
+   - Error limit: Track up to 100 recent errors
+
+### Performance Considerations
+
+- **Batch Size**: 100 devices (configurable via `DEVICE_SYNC_BATCH_SIZE`)
+- **Expected RU Cost**: ~0.5 RU per device UPSERT = ~1000 RU total
+- **Target Execution Time**: < 5 minutes for 2000 devices
+- **Graph API Calls**: ~3-4 calls (999 items per page)
+- **CosmosDB Writes**: 20 bulk operations (100 devices each)
+
+### Monitoring and Debugging
+
+Logs to watch for:
+- `[ManagedDevices Sync] Starting device synchronization` - Sync initiated
+- `[Graph API] Full device fetch completed` - All devices fetched
+- `[CosmosDB] Bulk upsert operation completed` - Batch processing status
+- `[ManagedDevices Sync] Synchronization completed` - Final results
+
+Metrics tracked:
+- `totalDevicesFetched` - Devices from Graph API
+- `devicesProcessed` - Successfully written to CosmosDB
+- `devicesFailed` - Failed to write
+- `totalRuConsumed` - CosmosDB request units
+- `executionTimeMs` - Total sync time
+
+### Testing
+
+Test files:
+- `tests/repositories/ManagedDeviceCosmosRepository.test.ts`
+- `tests/services/ManagedDeviceSyncService.test.ts`
+- `tests/functions/syncManagedDevicesTimer.test.ts`
+
+Run tests:
+```bash
+npm test -- ManagedDevice
+```
 
 ## Local Development Setup
 
 1. Install dependencies: `npm install`
-2. Create `local.settings.json` with required environment variables
+2. Create `local.settings.json` with required environment variables (including device sync variables)
 3. Ensure Azure CosmosDB and Azure Cognitive Search services are configured
 4. Build project: `npm run build`
 5. Start in development mode with watch: `npm run watch` + `npm start` (separate terminals)
 6. Access Swagger UI: `http://localhost:7071/api/swagger`
 7. Test endpoints with function key: Add `?code=<your-key>` or header `x-functions-key: <your-key>`
+8. Manually trigger device sync: `GET http://localhost:7071/api/trigger/sync-managed-devices?code=<your-key>`

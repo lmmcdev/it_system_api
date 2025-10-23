@@ -1,6 +1,6 @@
 /**
- * Microsoft Graph API repository for Managed Device data access (read-only)
- * Handles all Graph API calls with proper error handling, pagination, and query tracing
+ * Microsoft Defender for Endpoint API repository for device data access (read-only)
+ * Handles all Defender API calls with proper error handling, pagination, and query tracing
  *
  * Security Features:
  * - Parameterized OData filters
@@ -10,8 +10,8 @@
  * - Never logs access tokens
  */
 
-import { ManagedDevice, ManagedDeviceListResponse } from '../models/ManagedDevice';
-import { graphAuthHelper } from '../utils/graphAuthHelper';
+import { DefenderDevice, DefenderDeviceListResponse } from '../models/DefenderDevice';
+import { defenderAuthHelper } from '../utils/defenderAuthHelper';
 import { logger } from '../utils/logger';
 import { NotFoundError, ServiceError } from '../utils/errorHandler';
 
@@ -37,10 +37,10 @@ interface QueryTrace {
   hasNextLink: boolean;
 }
 
-export class ManagedDeviceRepository {
-  private readonly GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
+export class DefenderDeviceRepository {
+  private readonly DEFENDER_API_BASE = 'https://api.security.microsoft.com/api';
   private readonly REQUEST_TIMEOUT_MS = 30000; // 30 seconds
-  private readonly MAX_PAGE_SIZE = 999; // Graph API max
+  private readonly MAX_PAGE_SIZE = 10000; // Defender API typical max
 
   /**
    * Creates a timeout promise that rejects after specified milliseconds
@@ -48,7 +48,7 @@ export class ManagedDeviceRepository {
   private createTimeoutPromise(timeoutMs: number): Promise<never> {
     return new Promise((_, reject) => {
       setTimeout(() => {
-        reject(new ServiceError(`Graph API request timeout exceeded (${timeoutMs}ms). Please refine your query.`));
+        reject(new ServiceError(`Defender API request timeout exceeded (${timeoutMs}ms). Please refine your query.`));
       }, timeoutMs);
     });
   }
@@ -94,10 +94,10 @@ export class ManagedDeviceRepository {
   }
 
   /**
-   * Log Graph API query trace
+   * Log Defender API query trace
    */
   private logQueryTrace(trace: QueryTrace): void {
-    logger.info('[Graph API Query Trace]', {
+    logger.info('[Defender API Query Trace]', {
       url: trace.url,
       filter: trace.filter,
       select: trace.select,
@@ -109,16 +109,16 @@ export class ManagedDeviceRepository {
   }
 
   /**
-   * Make Graph API request with timeout and error handling
+   * Make Defender API request with timeout and error handling
    */
-  private async makeGraphRequest<T>(url: string): Promise<T> {
+  private async makeDefenderRequest<T>(url: string): Promise<T> {
     const startTime = Date.now();
 
     try {
       // Get access token
-      const accessToken = await graphAuthHelper.getAccessToken();
+      const accessToken = await defenderAuthHelper.getAccessToken();
 
-      logger.info('[Graph API] Making request', {
+      logger.info('[Defender API] Making request', {
         url: url.replace(/\?.*/,'?...'), // Don't log query params (may contain sensitive filters)
         method: 'GET'
       });
@@ -126,13 +126,12 @@ export class ManagedDeviceRepository {
       // Create timeout promise
       const timeoutPromise = this.createTimeoutPromise(this.REQUEST_TIMEOUT_MS);
 
-      // Make Graph API request
+      // Make Defender API request
       const fetchPromise = fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`, // NEVER log this
-          'Content-Type': 'application/json',
-          'ConsistencyLevel': 'eventual' // Required for advanced queries
+          'Content-Type': 'application/json'
         }
       });
 
@@ -143,7 +142,7 @@ export class ManagedDeviceRepository {
       if (!response.ok) {
         const errorText = await response.text();
 
-        logger.error('[Graph API] Request failed', new Error(`HTTP ${response.status}: ${response.statusText}`), {
+        logger.error('[Defender API] Request failed', new Error(`HTTP ${response.status}: ${response.statusText}`), {
           status: response.status,
           statusText: response.statusText,
           executionTime: `${executionTime}ms`,
@@ -152,33 +151,32 @@ export class ManagedDeviceRepository {
 
         // Handle 404 Not Found
         if (response.status === 404) {
-          throw new NotFoundError('Managed Device', 'requested');
+          throw new NotFoundError('Defender Device', 'requested');
         }
 
         // Handle 429 Throttling
         if (response.status === 429) {
           const retryAfter = response.headers.get('Retry-After');
-          logger.error('[Graph API] Request throttled (429)', new Error('Rate limit exceeded'), {
+          const retryMessage = retryAfter ? ` Retry after ${retryAfter} seconds.` : '';
+          logger.error('[Defender API] Request throttled (429)', new Error('Rate limit exceeded'), {
             retryAfter: retryAfter ? `${retryAfter}s` : 'unknown',
             executionTime: `${executionTime}ms`
           });
-          throw new ServiceError('Microsoft Graph API rate limit exceeded. Please retry later.', {
-            retryAfter: retryAfter ? `${retryAfter}s` : 'unknown'
-          });
+          throw new ServiceError(`Microsoft Defender API rate limit exceeded.${retryMessage}`);
         }
 
         // Handle 401/403 Authentication errors
         if (response.status === 401 || response.status === 403) {
-          throw new ServiceError('Microsoft Graph API authentication failed. Check credentials and permissions.');
+          throw new ServiceError('Microsoft Defender API authentication failed. Check credentials and permissions.');
         }
 
-        throw new ServiceError(`Microsoft Graph API request failed with status ${response.status}`);
+        throw new ServiceError(`Microsoft Defender API request failed with status ${response.status}`);
       }
 
       // Parse response
       const data = await response.json() as T;
 
-      logger.info('[Graph API] Request successful', {
+      logger.info('[Defender API] Request successful', {
         executionTime: `${executionTime}ms`
       });
 
@@ -194,37 +192,37 @@ export class ManagedDeviceRepository {
 
       // Handle network errors
       if (error instanceof TypeError && error.message.includes('fetch')) {
-        logger.error('[Graph API] Network error', error as Error, {
+        logger.error('[Defender API] Network error', error as Error, {
           executionTime: `${executionTime}ms`
         });
-        throw new ServiceError('Network error while connecting to Microsoft Graph API');
+        throw new ServiceError('Network error while connecting to Microsoft Defender API');
       }
 
       // Handle unknown errors
-      logger.error('[Graph API] Unexpected error', error as Error, {
+      logger.error('[Defender API] Unexpected error', error as Error, {
         executionTime: `${executionTime}ms`
       });
-      throw new ServiceError('Unexpected error during Graph API request');
+      throw new ServiceError('Unexpected error during Defender API request');
     }
   }
 
   /**
-   * Get managed device by ID
+   * Get defender device by ID
    */
-  async getById(id: string): Promise<ManagedDevice> {
+  async getById(id: string): Promise<DefenderDevice> {
     const startTime = Date.now();
 
     try {
-      logger.info('[Graph API] Fetching managed device by ID', { id });
+      logger.info('[Defender API] Fetching defender device by ID', { id });
 
-      const url = `${this.GRAPH_API_BASE}/deviceManagement/managedDevices/${id}`;
-      const device = await this.makeGraphRequest<ManagedDevice>(url);
+      const url = `${this.DEFENDER_API_BASE}/machines/${id}`;
+      const device = await this.makeDefenderRequest<DefenderDevice>(url);
 
       const executionTime = Date.now() - startTime;
 
-      logger.info('[Graph API] Managed device fetched successfully', {
+      logger.info('[Defender API] Defender device fetched successfully', {
         id,
-        deviceName: device.deviceName,
+        computerDnsName: device.computerDnsName,
         executionTime: `${executionTime}ms`
       });
 
@@ -237,7 +235,7 @@ export class ManagedDeviceRepository {
         throw error;
       }
 
-      logger.error('[Graph API] Failed to fetch managed device', error as Error, {
+      logger.error('[Defender API] Failed to fetch defender device', error as Error, {
         id,
         executionTime: `${executionTime}ms`
       });
@@ -247,26 +245,25 @@ export class ManagedDeviceRepository {
   }
 
   /**
-   * Get all managed devices with optional filtering and pagination
+   * Get all defender devices with optional filtering and pagination
    */
   async getAll(
     filter?: {
-      complianceState?: string | string[];
-      operatingSystem?: string | string[];
-      deviceType?: string | string[];
-      managementState?: string | string[];
-      userId?: string;
+      healthStatus?: string | string[];
+      riskScore?: string | string[];
+      osPlatform?: string | string[];
+      exposureLevel?: string | string[];
     },
     options?: {
       pageSize?: number;
       nextLink?: string;
       select?: string[];
     }
-  ): Promise<PaginatedResponse<ManagedDevice>> {
+  ): Promise<PaginatedResponse<DefenderDevice>> {
     const startTime = Date.now();
 
     try {
-      logger.info('[Graph API] Fetching managed devices', { filter, options });
+      logger.info('[Defender API] Fetching defender devices', { filter, options });
 
       let url: string;
 
@@ -275,7 +272,7 @@ export class ManagedDeviceRepository {
         url = options.nextLink;
       } else {
         // Build initial request URL
-        url = `${this.GRAPH_API_BASE}/deviceManagement/managedDevices`;
+        url = `${this.DEFENDER_API_BASE}/machines`;
 
         const queryParams: string[] = [];
 
@@ -283,20 +280,17 @@ export class ManagedDeviceRepository {
         if (filter) {
           const filterObj: Record<string, string | string[]> = {};
 
-          if (filter.complianceState) {
-            filterObj['complianceState'] = filter.complianceState;
+          if (filter.healthStatus) {
+            filterObj['healthStatus'] = filter.healthStatus;
           }
-          if (filter.operatingSystem) {
-            filterObj['operatingSystem'] = filter.operatingSystem;
+          if (filter.riskScore) {
+            filterObj['riskScore'] = filter.riskScore;
           }
-          if (filter.deviceType) {
-            filterObj['deviceType'] = filter.deviceType;
+          if (filter.osPlatform) {
+            filterObj['osPlatform'] = filter.osPlatform;
           }
-          if (filter.managementState) {
-            filterObj['managementState'] = filter.managementState;
-          }
-          if (filter.userId) {
-            filterObj['userId'] = filter.userId;
+          if (filter.exposureLevel) {
+            filterObj['exposureLevel'] = filter.exposureLevel;
           }
 
           const filterString = this.buildFilterString(filterObj);
@@ -305,8 +299,8 @@ export class ManagedDeviceRepository {
           }
         }
 
-        // Add $top for page size
-        const pageSize = Math.min(options?.pageSize || 100, this.MAX_PAGE_SIZE);
+        // Add $top for page size (Defender API supports up to 10,000)
+        const pageSize = Math.min(options?.pageSize || 10000, this.MAX_PAGE_SIZE);
         queryParams.push(`$top=${pageSize}`);
 
         // Add $select if provided
@@ -320,7 +314,7 @@ export class ManagedDeviceRepository {
       }
 
       // Make request
-      const response = await this.makeGraphRequest<ManagedDeviceListResponse>(url);
+      const response = await this.makeDefenderRequest<DefenderDeviceListResponse>(url);
 
       const executionTime = Date.now() - startTime;
 
@@ -334,7 +328,7 @@ export class ManagedDeviceRepository {
         hasNextLink: !!response['@odata.nextLink']
       });
 
-      logger.info('[Graph API] Managed devices fetched successfully', {
+      logger.info('[Defender API] Defender devices fetched successfully', {
         itemCount: response.value.length,
         hasMore: !!response['@odata.nextLink'],
         executionTime: `${executionTime}ms`
@@ -350,7 +344,7 @@ export class ManagedDeviceRepository {
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
-      logger.error('[Graph API] Failed to fetch managed devices', error as Error, {
+      logger.error('[Defender API] Failed to fetch defender devices', error as Error, {
         filter,
         executionTime: `${executionTime}ms`
       });
@@ -360,51 +354,54 @@ export class ManagedDeviceRepository {
   }
 
   /**
-   * Get managed devices by user ID
+   * Get defender devices by health status
    */
-  async getByUserId(userId: string, options?: { pageSize?: number; nextLink?: string }): Promise<PaginatedResponse<ManagedDevice>> {
-    return this.getAll({ userId }, options);
-  }
-
-  /**
-   * Get managed devices by compliance state
-   */
-  async getByComplianceState(
-    complianceState: string | string[],
+  async getByHealthStatus(
+    healthStatus: string | string[],
     options?: { pageSize?: number; nextLink?: string }
-  ): Promise<PaginatedResponse<ManagedDevice>> {
-    return this.getAll({ complianceState }, options);
+  ): Promise<PaginatedResponse<DefenderDevice>> {
+    return this.getAll({ healthStatus }, options);
   }
 
   /**
-   * Get non-compliant devices
+   * Get defender devices by risk score
    */
-  async getNonCompliantDevices(options?: { pageSize?: number; nextLink?: string }): Promise<PaginatedResponse<ManagedDevice>> {
-    return this.getAll({ complianceState: 'noncompliant' }, options);
+  async getByRiskScore(
+    riskScore: string | string[],
+    options?: { pageSize?: number; nextLink?: string }
+  ): Promise<PaginatedResponse<DefenderDevice>> {
+    return this.getAll({ riskScore }, options);
   }
 
   /**
-   * Get managed devices by operating system
+   * Get high-risk devices
+   */
+  async getHighRiskDevices(options?: { pageSize?: number; nextLink?: string }): Promise<PaginatedResponse<DefenderDevice>> {
+    return this.getAll({ riskScore: 'High' }, options);
+  }
+
+  /**
+   * Get defender devices by operating system
    */
   async getByOperatingSystem(
-    operatingSystem: string | string[],
+    osPlatform: string | string[],
     options?: { pageSize?: number; nextLink?: string }
-  ): Promise<PaginatedResponse<ManagedDevice>> {
-    return this.getAll({ operatingSystem }, options);
+  ): Promise<PaginatedResponse<DefenderDevice>> {
+    return this.getAll({ osPlatform }, options);
   }
 
   /**
-   * Get managed devices by device type
+   * Get defender devices by exposure level
    */
-  async getByDeviceType(
-    deviceType: string | string[],
+  async getByExposureLevel(
+    exposureLevel: string | string[],
     options?: { pageSize?: number; nextLink?: string }
-  ): Promise<PaginatedResponse<ManagedDevice>> {
-    return this.getAll({ deviceType }, options);
+  ): Promise<PaginatedResponse<DefenderDevice>> {
+    return this.getAll({ exposureLevel }, options);
   }
 
   /**
-   * Check if managed device exists
+   * Check if defender device exists
    */
   async exists(id: string): Promise<boolean> {
     try {
@@ -419,27 +416,27 @@ export class ManagedDeviceRepository {
   }
 
   /**
-   * Get all managed devices with automatic pagination handling
-   * Fetches ALL devices from Graph API by following @odata.nextLink
-   * Used for full sync operations (~2000 devices)
+   * Get all defender devices with automatic pagination handling
+   * Fetches ALL devices from Defender API by following @odata.nextLink
+   * Used for full sync operations
    *
    * WARNING: This method loads all devices into memory. For large datasets,
    * consider using getAll() with manual pagination instead.
    *
-   * @returns Promise<ManagedDevice[]> - Array of all managed devices
+   * @returns Promise<DefenderDevice[]> - Array of all defender devices
    */
-  async getAllDevicesPaginated(): Promise<ManagedDevice[]> {
-    const allDevices: ManagedDevice[] = [];
+  async getAllDevicesPaginated(): Promise<DefenderDevice[]> {
+    const allDevices: DefenderDevice[] = [];
     let nextLink: string | undefined = undefined;
     let pageCount = 0;
     const startTime = Date.now();
 
     try {
-      logger.info('[Graph API] Starting full device fetch with automatic pagination');
+      logger.info('[Defender API] Starting full device fetch with automatic pagination');
 
       do {
         pageCount++;
-        logger.info('[Graph API] Fetching page', {
+        logger.info('[Defender API] Fetching page', {
           pageNumber: pageCount,
           devicesFetchedSoFar: allDevices.length
         });
@@ -455,7 +452,7 @@ export class ManagedDeviceRepository {
         allDevices.push(...response.items);
         nextLink = response.nextLink;
 
-        logger.info('[Graph API] Page fetched successfully', {
+        logger.info('[Defender API] Page fetched successfully', {
           pageNumber: pageCount,
           itemsInPage: response.items.length,
           totalDevicesFetched: allDevices.length,
@@ -466,7 +463,7 @@ export class ManagedDeviceRepository {
 
       const executionTime = Date.now() - startTime;
 
-      logger.info('[Graph API] Full device fetch completed', {
+      logger.info('[Defender API] Full device fetch completed', {
         totalPages: pageCount,
         totalDevices: allDevices.length,
         executionTime: `${executionTime}ms`,
@@ -478,7 +475,7 @@ export class ManagedDeviceRepository {
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
-      logger.error('[Graph API] Failed to fetch all devices with pagination', error as Error, {
+      logger.error('[Defender API] Failed to fetch all devices with pagination', error as Error, {
         pagesFetchedBeforeError: pageCount,
         devicesFetchedBeforeError: allDevices.length,
         executionTime: `${executionTime}ms`
@@ -490,4 +487,4 @@ export class ManagedDeviceRepository {
 }
 
 // Export singleton instance
-export const managedDeviceRepository = new ManagedDeviceRepository();
+export const defenderDeviceRepository = new DefenderDeviceRepository();

@@ -12,6 +12,8 @@ export interface EnvironmentConfig {
     alertContainerId: string;
     riskDetectionContainerId: string;
     alertStatisticsContainerId: string;
+    devicesIntuneContainerId: string; // Managed devices from Intune
+    devicesDefenderContainerId: string; // Defender devices from Microsoft Defender for Endpoint
   };
   search: {
     endpoint: string;
@@ -24,10 +26,25 @@ export interface EnvironmentConfig {
     clientSecret: string;
     scope: string;
   };
+  defender: {
+    clientId: string;
+    tenantId: string;
+    clientSecret: string;
+    scope: string;
+  };
   statistics: {
     batchSize: number;
     topNDefault: number;
     timerSchedule: string;
+  };
+  deviceSync: {
+    batchSize: number;
+    timerSchedule: string;
+  };
+  defenderDeviceSync: {
+    batchSize: number;
+    timerSchedule: string;
+    containerId: string;
   };
   app: {
     nodeEnv: string;
@@ -45,6 +62,8 @@ export function getEnvironmentConfig(): EnvironmentConfig {
     'COSMOS_DATABASE_ID',
     'COSMOS_CONTAINER_ALERT',
     'COSMOS_CONTAINER_RISK_DETECTION',
+    'COSMOS_CONTAINER_DEVICES_INTUNE',
+    'COSMOS_CONTAINER_DEVICES_DEFENDER',
     'SEARCH_ENDPOINT',
     'SEARCH_API_KEY',
     'SEARCH_INDEX_NAME'
@@ -65,7 +84,9 @@ export function getEnvironmentConfig(): EnvironmentConfig {
       containerId: process.env.COSMOS_CONTAINER_ID!,
       alertContainerId: process.env.COSMOS_CONTAINER_ALERT!,
       riskDetectionContainerId: process.env.COSMOS_CONTAINER_RISK_DETECTION!,
-      alertStatisticsContainerId: process.env.COSMOS_CONTAINER_ALERT_STATISTICS || 'alerts_statistics'
+      alertStatisticsContainerId: process.env.COSMOS_CONTAINER_ALERT_STATISTICS || 'alerts_statistics',
+      devicesIntuneContainerId: process.env.COSMOS_CONTAINER_DEVICES_INTUNE!,
+      devicesDefenderContainerId: process.env.COSMOS_CONTAINER_DEVICES_DEFENDER!
     },
     search: {
       endpoint: process.env.SEARCH_ENDPOINT!,
@@ -78,10 +99,25 @@ export function getEnvironmentConfig(): EnvironmentConfig {
       clientSecret: process.env.GRAPH_CLIENT_SECRET || '',
       scope: process.env.GRAPH_SCOPE || 'https://graph.microsoft.com/.default'
     },
+    defender: {
+      clientId: process.env.DEFENDER_CLIENT_ID || process.env.GRAPH_CLIENT_ID || '',
+      tenantId: process.env.DEFENDER_TENANT_ID || process.env.GRAPH_TENANT_ID || '',
+      clientSecret: process.env.DEFENDER_CLIENT_SECRET || process.env.GRAPH_CLIENT_SECRET || '',
+      scope: process.env.DEFENDER_SCOPE || 'https://api.securitycenter.microsoft.com/.default'
+    },
     statistics: {
       batchSize: parseInt(process.env.STATISTICS_BATCH_SIZE || '100', 10),
       topNDefault: parseInt(process.env.STATISTICS_TOP_N_DEFAULT || '10', 10),
       timerSchedule: process.env.STATISTICS_TIMER_SCHEDULE || '0 0 * * * *'
+    },
+    deviceSync: {
+      batchSize: parseInt(process.env.DEVICE_SYNC_BATCH_SIZE || '100', 10),
+      timerSchedule: process.env.DEVICE_SYNC_TIMER_SCHEDULE || '0 0 */6 * * *' // Every 6 hours
+    },
+    defenderDeviceSync: {
+      batchSize: parseInt(process.env.DEFENDER_SYNC_BATCH_SIZE || '100', 10),
+      timerSchedule: process.env.DEFENDER_SYNC_TIMER_SCHEDULE || '0 0 */6 * * *', // Every 6 hours
+      containerId: process.env.COSMOS_CONTAINER_DEVICES_DEFENDER!
     },
     app: {
       nodeEnv: process.env.NODE_ENV || 'development',

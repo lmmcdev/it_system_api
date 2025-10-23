@@ -779,15 +779,201 @@ GET /compliance-policies/policy-12345?code=your-key
 
 ---
 
+## 🔄 Device Sync Triggers
+
+### GET /trigger/sync-managed-devices
+**Description**: Manually trigger synchronization of managed devices from Microsoft Graph API to CosmosDB
+
+**Query Parameters**: None (uses function key for authentication)
+
+**Example**:
+```bash
+GET /trigger/sync-managed-devices?code=your-key
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "status": "success",
+  "summary": {
+    "totalDevicesFetched": 2000,
+    "devicesProcessed": 1995,
+    "devicesFailed": 5,
+    "executionTimeMs": 245000
+  },
+  "graphApiMetrics": {
+    "calls": 4,
+    "pages": 3,
+    "totalRequestTimeMs": 15000,
+    "averageRequestTimeMs": "3750.00"
+  },
+  "cosmosDbMetrics": {
+    "writes": 1995,
+    "totalRuConsumed": "997.50",
+    "averageRuPerWrite": "0.50"
+  },
+  "errors": {
+    "count": 5,
+    "sample": [
+      {
+        "deviceId": "device-123",
+        "deviceName": "LAPTOP-XYZ",
+        "error": "HTTP 429: Throttled",
+        "timestamp": "2025-10-23T10:30:15Z"
+      }
+    ],
+    "hasMore": false
+  },
+  "timestamp": "2025-10-23T10:35:00.000Z"
+}
+```
+
+**Sync Status Values**:
+- `success`: All devices synced successfully
+- `partial`: Some devices failed but majority succeeded
+- `failed`: Sync failed completely
+
+**Notes**:
+- Syncs approximately 2000 devices from Microsoft Graph API
+- Uses bulk UPSERT operations for performance
+- Handles pagination automatically
+- Target completion time: < 5 minutes
+- Tracks sync metadata in CosmosDB
+
+---
+
+### syncManagedDevicesTimer (Timer Trigger)
+**Description**: Automatically synchronizes managed devices every 6 hours
+
+**Schedule**: `0 0 */6 * * *` (runs at 00:00, 06:00, 12:00, 18:00 UTC)
+
+**Not Directly Callable** (use `/trigger/sync-managed-devices` for manual sync)
+
+**Behavior**:
+- Fetches all managed devices from Microsoft Graph API
+- Uses pagination to handle ~2000 devices
+- Processes devices in batches of 100
+- Performs bulk UPSERT to CosmosDB `devices_intune` container
+- Updates sync metadata with results and errors
+- Logs comprehensive metrics (RU consumption, execution time, etc.)
+
+**Automatic Features**:
+- Exponential backoff retry on 429 throttling
+- Individual device error tracking
+- Continues processing even if individual batches fail
+- Maintains sync history and statistics
+
+---
+
+### GET /trigger/sync-defender-devices
+**Description**: Manually trigger synchronization of Defender devices from Microsoft Defender for Endpoint API to CosmosDB
+
+**Query Parameters**: None (uses function key for authentication)
+
+**Example**:
+```bash
+GET /trigger/sync-defender-devices?code=your-key
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "status": "success",
+  "summary": {
+    "totalDevicesFetched": 5000,
+    "devicesProcessed": 4998,
+    "devicesFailed": 2,
+    "executionTimeMs": 180000
+  },
+  "graphApiMetrics": {
+    "calls": 2,
+    "pages": 1,
+    "totalRequestTimeMs": 8000,
+    "averageRequestTimeMs": "4000.00"
+  },
+  "cosmosDbMetrics": {
+    "writes": 4998,
+    "totalRuConsumed": "2499.00",
+    "averageRuPerWrite": "0.50"
+  },
+  "errors": {
+    "count": 2,
+    "sample": [
+      {
+        "deviceId": "device-abc123",
+        "deviceName": "WORKSTATION-01",
+        "error": "HTTP 429: Throttled",
+        "timestamp": "2025-10-23T14:25:10Z"
+      }
+    ],
+    "hasMore": false
+  },
+  "timestamp": "2025-10-23T14:28:00.000Z"
+}
+```
+
+**Sync Status Values**:
+- `success`: All devices synced successfully
+- `partial`: Some devices failed but majority succeeded
+- `failed`: Sync failed completely
+
+**Notes**:
+- Syncs devices from Microsoft Defender for Endpoint API
+- Defender API returns up to 10,000 devices per page
+- Uses bulk UPSERT operations for performance
+- Handles pagination automatically
+- Target completion time: < 5 minutes
+- Tracks sync metadata in CosmosDB
+
+---
+
+### syncDefenderDevicesTimer (Timer Trigger)
+**Description**: Automatically synchronizes Defender devices every 6 hours
+
+**Schedule**: `0 0 */6 * * *` (runs at 00:00, 06:00, 12:00, 18:00 UTC)
+
+**Not Directly Callable** (use `/trigger/sync-defender-devices` for manual sync)
+
+**Behavior**:
+- Fetches all devices from Microsoft Defender for Endpoint API
+- Uses pagination to handle large device counts
+- Processes devices in batches of 100
+- Performs bulk UPSERT to CosmosDB `devices_defender` container
+- Updates sync metadata with results and errors
+- Logs comprehensive metrics (RU consumption, execution time, etc.)
+
+**Automatic Features**:
+- Exponential backoff retry on 429 throttling
+- Individual device error tracking
+- Continues processing even if individual batches fail
+- Maintains sync history and statistics
+- Improved throttle retry logic with individual device retry
+
+**Device Properties Synchronized**:
+- Device ID, computer DNS name, OS platform/version
+- Health status (Active, Inactive, ImpairedCommunication, etc.)
+- Risk score (None, Informational, Low, Medium, High)
+- Exposure level (None, Low, Medium, High)
+- Network information (IP addresses, MAC addresses)
+- Azure AD device ID
+- RBAC group information
+- Machine tags
+- First seen / Last seen timestamps
+
+---
+
 ## 📚 Documentation Links
 
 - **Swagger UI**: `http://localhost:7071/api/swagger`
 - **OpenAPI Spec**: `http://localhost:7071/api/swagger/openapi.json`
 - **Statistics Guide**: `STATISTICS-DAILY-UPSERT.md`
+- **Device Sync Guide**: `DEVICE-SYNC-PROCESS.md`
 - **Project Docs**: `README.md`, `CLAUDE.md`
 
 ---
 
-**Last Updated**: 2025-10-22
+**Last Updated**: 2025-10-23
 **API Version**: 1.0
-**Total Endpoints**: 22 (21 HTTP + 1 Timer)
+**Total Endpoints**: 25 (23 HTTP + 3 Timer Triggers)

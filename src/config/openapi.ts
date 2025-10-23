@@ -2212,6 +2212,408 @@ export const openApiSpec = {
           }
         }
       }
+    },
+    '/trigger/sync-managed-devices': {
+      get: {
+        tags: ['Managed Devices'],
+        summary: 'Manually trigger device synchronization',
+        description: 'Triggers synchronization of managed devices from Microsoft Graph API to CosmosDB. Fetches approximately 2000 devices and performs bulk UPSERT operations.',
+        operationId: 'triggerSyncManagedDevices',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Sync completed (check status for success/partial/failed)',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: {
+                      type: 'boolean',
+                      description: 'Overall sync success (true for success/partial, false for failed)'
+                    },
+                    status: {
+                      type: 'string',
+                      enum: ['success', 'partial', 'failed'],
+                      description: 'Sync status: success (all devices), partial (some failed), failed (complete failure)'
+                    },
+                    summary: {
+                      type: 'object',
+                      properties: {
+                        totalDevicesFetched: {
+                          type: 'number',
+                          description: 'Total devices fetched from Graph API'
+                        },
+                        devicesProcessed: {
+                          type: 'number',
+                          description: 'Devices successfully written to CosmosDB'
+                        },
+                        devicesFailed: {
+                          type: 'number',
+                          description: 'Devices that failed to write'
+                        },
+                        executionTimeMs: {
+                          type: 'number',
+                          description: 'Total execution time in milliseconds'
+                        }
+                      }
+                    },
+                    graphApiMetrics: {
+                      type: 'object',
+                      properties: {
+                        calls: {
+                          type: 'number',
+                          description: 'Total Graph API calls made'
+                        },
+                        pages: {
+                          type: 'number',
+                          description: 'Total pages fetched'
+                        },
+                        totalRequestTimeMs: {
+                          type: 'number',
+                          description: 'Total time spent in Graph API calls'
+                        },
+                        averageRequestTimeMs: {
+                          type: 'string',
+                          description: 'Average request time per call'
+                        }
+                      }
+                    },
+                    cosmosDbMetrics: {
+                      type: 'object',
+                      properties: {
+                        writes: {
+                          type: 'number',
+                          description: 'Total CosmosDB write operations'
+                        },
+                        totalRuConsumed: {
+                          type: 'string',
+                          description: 'Total Request Units consumed'
+                        },
+                        averageRuPerWrite: {
+                          type: 'string',
+                          description: 'Average RU per write operation'
+                        }
+                      }
+                    },
+                    errors: {
+                      type: 'object',
+                      properties: {
+                        count: {
+                          type: 'number',
+                          description: 'Total error count'
+                        },
+                        sample: {
+                          type: 'array',
+                          description: 'Sample of up to 10 errors',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              deviceId: {
+                                type: 'string',
+                                description: 'Device ID that failed'
+                              },
+                              deviceName: {
+                                type: 'string',
+                                description: 'Device name (if available)'
+                              },
+                              error: {
+                                type: 'string',
+                                description: 'Error message'
+                              },
+                              timestamp: {
+                                type: 'string',
+                                format: 'date-time',
+                                description: 'Error timestamp'
+                              }
+                            }
+                          }
+                        },
+                        hasMore: {
+                          type: 'boolean',
+                          description: 'Whether more errors exist beyond the sample'
+                        }
+                      }
+                    },
+                    timestamp: {
+                      type: 'string',
+                      format: 'date-time',
+                      description: 'Response timestamp'
+                    }
+                  }
+                },
+                example: {
+                  success: true,
+                  status: 'success',
+                  summary: {
+                    totalDevicesFetched: 2000,
+                    devicesProcessed: 1995,
+                    devicesFailed: 5,
+                    executionTimeMs: 245000
+                  },
+                  graphApiMetrics: {
+                    calls: 4,
+                    pages: 3,
+                    totalRequestTimeMs: 15000,
+                    averageRequestTimeMs: '3750.00'
+                  },
+                  cosmosDbMetrics: {
+                    writes: 1995,
+                    totalRuConsumed: '997.50',
+                    averageRuPerWrite: '0.50'
+                  },
+                  errors: {
+                    count: 5,
+                    sample: [
+                      {
+                        deviceId: 'device-123',
+                        deviceName: 'LAPTOP-XYZ',
+                        error: 'HTTP 429: Throttled',
+                        timestamp: '2025-10-23T10:30:15Z'
+                      }
+                    ],
+                    hasMore: false
+                  },
+                  timestamp: '2025-10-23T10:35:00.000Z'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Unauthorized - Invalid or missing function key',
+            headers: {
+              'WWW-Authenticate': {
+                schema: {
+                  type: 'string',
+                  example: 'FunctionKey'
+                }
+              }
+            },
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/trigger/sync-defender-devices': {
+      get: {
+        tags: ['Defender Devices'],
+        summary: 'Manually trigger Defender device synchronization',
+        description: 'Triggers synchronization of devices from Microsoft Defender for Endpoint API to CosmosDB. Handles large device counts with pagination (up to 10,000 devices per page) and performs bulk UPSERT operations.',
+        operationId: 'triggerSyncDefenderDevices',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Sync completed (check status for success/partial/failed)',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: {
+                      type: 'boolean',
+                      description: 'Overall sync success (true for success/partial, false for failed)'
+                    },
+                    status: {
+                      type: 'string',
+                      enum: ['success', 'partial', 'failed'],
+                      description: 'Sync status: success (all devices), partial (some failed), failed (complete failure)'
+                    },
+                    summary: {
+                      type: 'object',
+                      properties: {
+                        totalDevicesFetched: {
+                          type: 'number',
+                          description: 'Total devices fetched from Defender API'
+                        },
+                        devicesProcessed: {
+                          type: 'number',
+                          description: 'Devices successfully written to CosmosDB'
+                        },
+                        devicesFailed: {
+                          type: 'number',
+                          description: 'Devices that failed to write'
+                        },
+                        executionTimeMs: {
+                          type: 'number',
+                          description: 'Total execution time in milliseconds'
+                        }
+                      }
+                    },
+                    graphApiMetrics: {
+                      type: 'object',
+                      properties: {
+                        calls: {
+                          type: 'number',
+                          description: 'Total Defender API calls made'
+                        },
+                        pages: {
+                          type: 'number',
+                          description: 'Total pages fetched'
+                        },
+                        totalRequestTimeMs: {
+                          type: 'number',
+                          description: 'Total time spent in Defender API calls'
+                        },
+                        averageRequestTimeMs: {
+                          type: 'string',
+                          description: 'Average request time per call'
+                        }
+                      }
+                    },
+                    cosmosDbMetrics: {
+                      type: 'object',
+                      properties: {
+                        writes: {
+                          type: 'number',
+                          description: 'Total CosmosDB write operations'
+                        },
+                        totalRuConsumed: {
+                          type: 'string',
+                          description: 'Total Request Units consumed'
+                        },
+                        averageRuPerWrite: {
+                          type: 'string',
+                          description: 'Average RU per write operation'
+                        }
+                      }
+                    },
+                    errors: {
+                      type: 'object',
+                      properties: {
+                        count: {
+                          type: 'number',
+                          description: 'Total error count'
+                        },
+                        sample: {
+                          type: 'array',
+                          description: 'Sample of up to 10 errors',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              deviceId: {
+                                type: 'string',
+                                description: 'Device ID that failed'
+                              },
+                              deviceName: {
+                                type: 'string',
+                                description: 'Device computer DNS name (if available)'
+                              },
+                              error: {
+                                type: 'string',
+                                description: 'Error message'
+                              },
+                              timestamp: {
+                                type: 'string',
+                                format: 'date-time',
+                                description: 'Error timestamp'
+                              }
+                            }
+                          }
+                        },
+                        hasMore: {
+                          type: 'boolean',
+                          description: 'Whether more errors exist beyond the sample'
+                        }
+                      }
+                    },
+                    timestamp: {
+                      type: 'string',
+                      format: 'date-time',
+                      description: 'Response timestamp'
+                    }
+                  }
+                },
+                example: {
+                  success: true,
+                  status: 'success',
+                  summary: {
+                    totalDevicesFetched: 5000,
+                    devicesProcessed: 4998,
+                    devicesFailed: 2,
+                    executionTimeMs: 180000
+                  },
+                  graphApiMetrics: {
+                    calls: 2,
+                    pages: 1,
+                    totalRequestTimeMs: 8000,
+                    averageRequestTimeMs: '4000.00'
+                  },
+                  cosmosDbMetrics: {
+                    writes: 4998,
+                    totalRuConsumed: '2499.00',
+                    averageRuPerWrite: '0.50'
+                  },
+                  errors: {
+                    count: 2,
+                    sample: [
+                      {
+                        deviceId: 'device-abc123',
+                        deviceName: 'WORKSTATION-01',
+                        error: 'HTTP 429: Throttled',
+                        timestamp: '2025-10-23T14:25:10Z'
+                      }
+                    ],
+                    hasMore: false
+                  },
+                  timestamp: '2025-10-23T14:28:00.000Z'
+                }
+              }
+            }
+          },
+          '401': {
+            description: 'Unauthorized - Invalid or missing function key',
+            headers: {
+              'WWW-Authenticate': {
+                schema: {
+                  type: 'string',
+                  example: 'FunctionKey'
+                }
+              }
+            },
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   components: {
