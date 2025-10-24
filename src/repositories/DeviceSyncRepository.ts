@@ -644,8 +644,9 @@ export class DeviceSyncRepository {
         parameters.push({ name: '@syncState', value: syncState });
       }
 
-      // Add ORDER BY for consistent pagination
-      query += ' ORDER BY c._ts DESC';
+      // NOTE: ORDER BY removed - CosmosDB provides continuation tokens without explicit ordering
+      // If you need specific ordering, create a composite index in Azure Portal first
+      // Example: query += ' ORDER BY c._ts DESC';
 
       const querySpec = {
         query,
@@ -657,6 +658,8 @@ export class DeviceSyncRepository {
         pageSize,
         hasContinuationToken: !!continuationToken
       });
+
+      logger.info(`QUERY EXE: ${query}`);
 
       const operation = async () => {
         return container.items
@@ -685,9 +688,21 @@ export class DeviceSyncRepository {
       logger.info('[CosmosDB] Sync documents query completed', {
         count: response.resources.length,
         hasMore: response.hasMoreResults,
+        hasContinuationToken: !!response.continuationToken,
+        continuationTokenLength: response.continuationToken?.length || 0,
         ruConsumed: `${ruConsumed.toFixed(2)} RU`,
         executionTime: `${executionTime}ms`
       });
+
+      // Debug: Log warning if hasMore but no continuation token
+      if (response.hasMoreResults && !response.continuationToken) {
+        logger.warn('[CosmosDB] WARNING: hasMoreResults=true but no continuationToken returned!', {
+          query,
+          pageSize,
+          syncState,
+          itemCount: response.resources.length
+        });
+      }
 
       return {
         documents: response.resources,
