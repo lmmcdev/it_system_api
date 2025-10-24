@@ -964,6 +964,85 @@ GET /trigger/sync-defender-devices?code=your-key
 
 ---
 
+### GET /devices/sync-all
+**Description**: Get cross-matched device sync documents from devices_all container
+
+**Authentication**: Function key required
+
+**Query Parameters**:
+- `syncState` (optional): Filter by sync state - `matched` | `only_intune` | `only_defender`
+- `pageSize` (optional): Items per page (1-100, default 50)
+- `continuationToken` (optional): Pagination token from previous response
+
+**Examples**:
+```bash
+# Get all synced devices
+GET /devices/sync-all?code=your-key
+
+# Get only matched devices (in both Intune and Defender)
+GET /devices/sync-all?syncState=matched&code=your-key
+
+# Get devices only in Intune
+GET /devices/sync-all?syncState=only_intune&pageSize=20&code=your-key
+
+# Get devices only in Defender
+GET /devices/sync-all?syncState=only_defender&code=your-key
+
+# Pagination
+GET /devices/sync-all?continuationToken=abc123&code=your-key
+```
+
+**Response**:
+```json
+{
+  "devices": [
+    {
+      "id": "d5f8c2e1-3a4b-5c6d-7e8f-9a0b1c2d3e4f",
+      "syncKey": "1be571a4-e358-4cbe-8c00-357be89e020e",
+      "syncState": "matched",
+      "syncTimestamp": "2025-10-24T15:30:00.000Z",
+      "intune": {
+        "id": "...",
+        "deviceName": "DESKTOP-ABC123",
+        "azureADDeviceId": "1be571a4-e358-4cbe-8c00-357be89e020e",
+        "operatingSystem": "Windows",
+        "complianceState": "compliant",
+        ...
+      },
+      "defender": {
+        "id": "...",
+        "computerDnsName": "DESKTOP-ABC123",
+        "aadDeviceId": "1be571a4-e358-4cbe-8c00-357be89e020e",
+        "osPlatform": "Windows11",
+        "healthStatus": "Active",
+        "riskScore": "Medium",
+        ...
+      }
+    }
+  ],
+  "pagination": {
+    "count": 50,
+    "hasMore": true,
+    "continuationToken": "xyz789"
+  },
+  "timestamp": "2025-10-24T15:35:00.000Z"
+}
+```
+
+**Sync States**:
+- `matched`: Device exists in both Intune and Defender (both objects present)
+- `only_intune`: Device only in Intune (defender object is undefined)
+- `only_defender`: Device only in Defender (intune object is undefined)
+
+**Use Cases**:
+- Monitor device coverage across platforms
+- Identify devices missing from either system
+- Validate cross-sync results
+- Generate compliance reports
+- Track device enrollment status
+
+---
+
 ### POST /devices/sync-cross
 **Description**: Manually trigger cross-synchronization of Intune and Defender devices
 
@@ -1093,4 +1172,4 @@ POST /devices/sync-cross?code=your-key
 
 **Last Updated**: 2025-10-24
 **API Version**: 1.0
-**Total Endpoints**: 27 (24 HTTP + 4 Timer Triggers)
+**Total Endpoints**: 28 (25 HTTP + 4 Timer Triggers)

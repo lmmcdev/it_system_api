@@ -609,6 +609,106 @@ export class DeviceSyncRepository {
       throw new ServiceError('Failed to clear sync documents');
     }
   }
+
+  /**
+   * Get sync documents with optional filtering and pagination
+   *
+   * @param syncState - Optional filter by sync state (matched, only_intune, only_defender)
+   * @param pageSize - Number of items per page (default 50, max 100)
+   * @param continuationToken - Token for pagination
+   * @returns Sync documents with pagination info
+   */
+  async getSyncDocuments(
+    syncState?: 'matched' | 'only_intune' | 'only_defender',
+    pageSize: number = 50,
+    continuationToken?: string
+  ): Promise<{
+    documents: DeviceSyncDocument[];
+    hasMore: boolean;
+    continuationToken?: string;
+    count: number;
+    ruConsumed: number;
+  }> {
+    const startTime = Date.now();
+
+    try {
+      await this.ensureInitialized();
+      const container = this.getDevicesAllContainer();
+
+      // Build query
+      let query = 'SELECT * FROM c';
+      const parameters: Array<{ name: string; value: string }> = [];
+
+      if (syncState) {
+        query += ' WHERE c.syncState = @syncState';
+        parameters.push({ name: '@syncState', value: syncState });
+      }
+
+      // Add ORDER BY for consistent pagination
+      query += ' ORDER BY c._ts DESC';
+
+      const querySpec = {
+        query,
+        parameters
+      };
+
+      logger.info('[CosmosDB] Querying sync documents', {
+        syncState: syncState || 'all',
+        pageSize,
+        hasContinuationToken: !!continuationToken
+      });
+
+      const operation = async () => {
+        return container.items
+          .query<DeviceSyncDocument>(querySpec, {
+            maxItemCount: pageSize,
+            continuationToken
+          })
+          .fetchNext();
+      };
+
+      const response: FeedResponse<DeviceSyncDocument> = await Promise.race([
+        this.retryWithBackoff(operation),
+        this.createTimeoutPromise(this.QUERY_TIMEOUT_MS)
+      ]);
+
+      const executionTime = Date.now() - startTime;
+      const ruConsumed = response.requestCharge || 0;
+
+      this.logQueryTrace({
+        operation: `Get sync documents (syncState: ${syncState || 'all'})`,
+        requestCharge: ruConsumed,
+        executionTime,
+        itemCount: response.resources.length
+      });
+
+      logger.info('[CosmosDB] Sync documents query completed', {
+        count: response.resources.length,
+        hasMore: response.hasMoreResults,
+        ruConsumed: `${ruConsumed.toFixed(2)} RU`,
+        executionTime: `${executionTime}ms`
+      });
+
+      return {
+        documents: response.resources,
+        hasMore: response.hasMoreResults,
+        continuationToken: response.continuationToken,
+        count: response.resources.length,
+        ruConsumed
+      };
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+
+      logger.error('[CosmosDB] Failed to get sync documents', error as Error, {
+        syncState,
+        pageSize,
+        errorCode: (error as { code?: number }).code,
+        executionTime: `${executionTime}ms`
+      });
+
+      throw new ServiceError('Failed to get sync documents');
+    }
+  }
 }
 
 // Export singleton instance

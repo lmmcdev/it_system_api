@@ -324,6 +324,62 @@ export class DeviceSyncService {
 
     return syncDocuments;
   }
+
+  /**
+   * Get synced devices with optional filtering by sync state
+   *
+   * @param syncState - Filter by sync state (matched, only_intune, only_defender)
+   * @param pageSize - Number of items per page
+   * @param continuationToken - Pagination token
+   * @returns Paginated sync documents
+   */
+  async getSyncedDevices(
+    syncState?: 'matched' | 'only_intune' | 'only_defender',
+    pageSize: number = 50,
+    continuationToken?: string
+  ): Promise<{
+    devices: DeviceSyncDocument[];
+    pagination: {
+      count: number;
+      hasMore: boolean;
+      continuationToken?: string;
+    };
+  }> {
+    try {
+      logger.info('[DeviceSyncService] Getting synced devices', {
+        syncState: syncState || 'all',
+        pageSize
+      });
+
+      const result = await deviceSyncRepository.getSyncDocuments(
+        syncState,
+        pageSize,
+        continuationToken
+      );
+
+      logger.info('[DeviceSyncService] Synced devices retrieved', {
+        count: result.count,
+        hasMore: result.hasMore,
+        ruConsumed: `${result.ruConsumed.toFixed(2)} RU`
+      });
+
+      return {
+        devices: result.documents,
+        pagination: {
+          count: result.count,
+          hasMore: result.hasMore,
+          continuationToken: result.continuationToken
+        }
+      };
+    } catch (error) {
+      logger.error('[DeviceSyncService] Failed to get synced devices', error as Error, {
+        syncState,
+        pageSize
+      });
+
+      throw new ServiceError('Failed to get synced devices');
+    }
+  }
 }
 
 // Export singleton instance
