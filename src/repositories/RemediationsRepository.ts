@@ -344,6 +344,7 @@ export class RemediationsRepository {
         hasContinuationToken: !!continuationToken
       });
 
+      //CAMBIAR AQUI A TICKETS ABIERTOS SOLAMENTE
       const query = 'SELECT * FROM c';
 
       // NOTE: ORDER BY removed - CosmosDB provides continuation tokens without explicit ordering

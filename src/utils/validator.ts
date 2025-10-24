@@ -1082,6 +1082,7 @@ export function validateStatisticsFilters(filters: {
  * Validates filter object for device search queries
  */
 export function validateDeviceSearchFilters(filters: {
+  deviceId?: string | null;
   syncKey?: string | null;
   syncState?: string | null;
   deviceName?: string | null;
@@ -1093,6 +1094,7 @@ export function validateDeviceSearchFilters(filters: {
   valid: boolean;
   errors?: string[];
   sanitized?: {
+    deviceId?: string;
     syncKey?: string;
     syncState?: 'matched' | 'only_intune' | 'only_defender';
     deviceName?: string;
@@ -1104,6 +1106,7 @@ export function validateDeviceSearchFilters(filters: {
 } {
   const errors: string[] = [];
   const sanitized: {
+    deviceId?: string;
     syncKey?: string;
     syncState?: 'matched' | 'only_intune' | 'only_defender';
     deviceName?: string;
@@ -1112,6 +1115,16 @@ export function validateDeviceSearchFilters(filters: {
     osPlatform?: string;
     lastIpAddress?: string;
   } = {};
+
+  // Validate deviceId (UUID format)
+  if (filters.deviceId) {
+    const deviceIdValidation = validateId(filters.deviceId);
+    if (!deviceIdValidation.valid) {
+      errors.push(`deviceId: ${deviceIdValidation.error}`);
+    } else {
+      sanitized.deviceId = filters.deviceId;
+    }
+  }
 
   // Validate syncKey (Azure AD Device ID - UUID format)
   if (filters.syncKey) {

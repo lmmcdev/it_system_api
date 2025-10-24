@@ -53,6 +53,9 @@ interface QueryTrace {
  */
 export interface DeviceSearchFilters {
   // General sync fields
+  // Device ID for cascading search
+  deviceId?: string;
+
   syncKey?: string;
   syncState?: 'matched' | 'only_intune' | 'only_defender';
 
@@ -769,6 +772,172 @@ export class DeviceSyncRepository {
     try {
       await this.ensureInitialized();
       const container = this.getDevicesAllContainer();
+
+    // Handle deviceId cascading search
+    if (filters.deviceId) {
+      logger.info('[CosmosDB] Performing cascading device search', {
+        deviceId: filters.deviceId
+      });
+
+      // First: Search in devices_all by id field
+      const allContainer = this.getDevicesAllContainer();
+      const allQuery = {
+        query: 'SELECT * FROM c WHERE c.id = @deviceId',
+        parameters: [{ name: '@deviceId', value: filters.deviceId }]
+      };
+
+      logger.info('[CosmosDB] Step 1: Searching devices_all by id', { deviceId: filters.deviceId });
+      
+      const allOperation = async () => {
+        return allContainer.items
+          .query<DeviceSyncDocument>(allQuery, { maxItemCount: 1 })
+          .fetchNext();
+      };
+
+      const allResponse = await Promise.race([
+        this.retryWithBackoff(allOperation),
+        this.createTimeoutPromise(this.QUERY_TIMEOUT_MS)
+      ]);
+
+      if (allResponse.resources.length > 0) {
+        const executionTime = Date.now() - startTime;
+        const ruConsumed = allResponse.requestCharge || 0;
+
+        this.logQueryTrace({
+          operation: 'Cascading search: devices_all by id',
+          requestCharge: ruConsumed,
+          executionTime,
+          itemCount: allResponse.resources.length
+        });
+
+        logger.info('[CosmosDB] Device found in devices_all', {
+          deviceId: filters.deviceId,
+          ruConsumed: `${ruConsumed.toFixed(2)} RU`,
+          executionTime: `${executionTime}ms`
+        });
+
+        return {
+          documents: allResponse.resources,
+          hasMore: false,
+          continuationToken: undefined,
+          count: allResponse.resources.length,
+          ruConsumed
+        };
+      }
+
+      // Second: Search in devices_intune by azureADDeviceId field
+      const intuneContainer = this.getDevicesIntuneContainer();
+      const intuneQuery = {
+        query: 'SELECT * FROM c WHERE c.azureADDeviceId = @deviceId',
+        parameters: [{ name: '@deviceId', value: filters.deviceId }]
+      };
+
+      logger.info('[CosmosDB] Step 2: Searching devices_intune by azureADDeviceId', { deviceId: filters.deviceId });
+
+      const intuneOperation = async () => {
+        return intuneContainer.items
+          .query(intuneQuery, { maxItemCount: 1 })
+          .fetchNext();
+      };
+
+      const intuneResponse = await Promise.race([
+        this.retryWithBackoff(intuneOperation),
+        this.createTimeoutPromise(this.QUERY_TIMEOUT_MS)
+      ]);
+
+      if (intuneResponse.resources.length > 0) {
+        const executionTime = Date.now() - startTime;
+        const totalRu = (allResponse.requestCharge || 0) + (intuneResponse.requestCharge || 0);
+
+        this.logQueryTrace({
+          operation: 'Cascading search: devices_intune by azureADDeviceId',
+          requestCharge: intuneResponse.requestCharge || 0,
+          executionTime,
+          itemCount: intuneResponse.resources.length
+        });
+
+        logger.info('[CosmosDB] Device found in devices_intune', {
+          deviceId: filters.deviceId,
+          ruConsumed: `${totalRu.toFixed(2)} RU`,
+          executionTime: `${executionTime}ms`
+        });
+
+        // Return raw Intune device (cast to any for compatibility)
+        return {
+          documents: intuneResponse.resources as any,
+          hasMore: false,
+          continuationToken: undefined,
+          count: intuneResponse.resources.length,
+          ruConsumed: totalRu
+        };
+      }
+
+      // Third: Search in devices_defender by aadDeviceId field
+      const defenderContainer = this.getDevicesDefenderContainer();
+      const defenderQuery = {
+        query: 'SELECT * FROM c WHERE c.aadDeviceId = @deviceId',
+        parameters: [{ name: '@deviceId', value: filters.deviceId }]
+      };
+
+      logger.info('[CosmosDB] Step 3: Searching devices_defender by aadDeviceId', { deviceId: filters.deviceId });
+
+      const defenderOperation = async () => {
+        return defenderContainer.items
+          .query(defenderQuery, { maxItemCount: 1 })
+          .fetchNext();
+      };
+
+      const defenderResponse = await Promise.race([
+        this.retryWithBackoff(defenderOperation),
+        this.createTimeoutPromise(this.QUERY_TIMEOUT_MS)
+      ]);
+
+      if (defenderResponse.resources.length > 0) {
+        const executionTime = Date.now() - startTime;
+        const totalRu = (allResponse.requestCharge || 0) + (intuneResponse.requestCharge || 0) + (defenderResponse.requestCharge || 0);
+
+        this.logQueryTrace({
+          operation: 'Cascading search: devices_defender by aadDeviceId',
+          requestCharge: defenderResponse.requestCharge || 0,
+          executionTime,
+          itemCount: defenderResponse.resources.length
+        });
+
+        logger.info('[CosmosDB] Device found in devices_defender', {
+          deviceId: filters.deviceId,
+          ruConsumed: `${totalRu.toFixed(2)} RU`,
+          executionTime: `${executionTime}ms`
+        });
+
+        // Return raw Defender device (cast to any for compatibility)
+        return {
+          documents: defenderResponse.resources as any,
+          hasMore: false,
+          continuationToken: undefined,
+          count: defenderResponse.resources.length,
+          ruConsumed: totalRu
+        };
+      }
+
+      // Not found in any container
+      const executionTime = Date.now() - startTime;
+      const totalRu = (allResponse.requestCharge || 0) + (intuneResponse.requestCharge || 0) + (defenderResponse.requestCharge || 0);
+
+      logger.info('[CosmosDB] Device not found in any container', {
+        deviceId: filters.deviceId,
+        ruConsumed: `${totalRu.toFixed(2)} RU`,
+        executionTime: `${executionTime}ms`
+      });
+
+      return {
+        documents: [],
+        hasMore: false,
+        continuationToken: undefined,
+        count: 0,
+        ruConsumed: totalRu
+      };
+    }
+
 
       // Build WHERE clause with AND logic for multiple filters
       const whereClauses: string[] = [];

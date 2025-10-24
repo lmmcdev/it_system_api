@@ -73,6 +73,7 @@ async function searchDevices(
     }
 
     // Extract query parameters
+    const deviceId = request.query.get('deviceId');
     const syncKey = request.query.get('syncKey');
     const syncState = request.query.get('syncState');
     const deviceName = request.query.get('deviceName');
@@ -107,6 +108,7 @@ async function searchDevices(
 
     // Validate search filters
     const filtersValidation = validateDeviceSearchFilters({
+      deviceId,
       syncKey,
       syncState,
       deviceName,
