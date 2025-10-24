@@ -61,3 +61,10 @@ nul
 
 # Admin/Development endpoints (not for production)
 src/functions/triggerStatisticsGeneration.ts
+
+# Plop generator tracking
+GENERATED_FILES.md
+PLOP-GENERATOR-GUIDE.md
+plop-templates/function.hbs
+plop-templates/repository.hbs
+plop-templates/service.hbs

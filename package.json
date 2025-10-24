@@ -15,7 +15,8 @@
     "test:verbose": "jest --verbose",
     "test:ci": "jest --ci --coverage --maxWorkers=2",
     "lint": "eslint . --ext .ts",
-    "lint:fix": "eslint . --ext .ts --fix"
+    "lint:fix": "eslint . --ext .ts --fix",
+    "generate:endpoint": "plop endpoint"
   },
   "dependencies": {
     "@azure/cosmos": "^4.0.0",
@@ -35,6 +36,7 @@
     "azure-functions-core-tools": "^4.0.5455",
     "eslint": "^8.56.0",
     "jest": "^30.2.0",
+    "plop": "^4.0.4",
     "rimraf": "^5.0.5",
     "ts-jest": "^29.4.5",
     "typescript": "^5.3.3"
