@@ -48,6 +48,24 @@ interface QueryTrace {
   itemCount: number;
 }
 
+/**
+ * Search filters for device sync documents
+ */
+export interface DeviceSearchFilters {
+  // General sync fields
+  syncKey?: string;
+  syncState?: 'matched' | 'only_intune' | 'only_defender';
+
+  // Intune device fields
+  deviceName?: string;
+  operatingSystem?: string;
+
+  // Defender device fields
+  computerDnsName?: string;
+  osPlatform?: string;
+  lastIpAddress?: string;
+}
+
 export class DeviceSyncRepository {
   private client: CosmosClient;
   private database: Database | null = null;
@@ -722,6 +740,161 @@ export class DeviceSyncRepository {
       });
 
       throw new ServiceError('Failed to get sync documents');
+    }
+  }
+
+  /**
+   * Search devices across sync documents with flexible filtering
+   * Supports searching in both intune and defender nested objects
+   * Uses case-insensitive CONTAINS queries for string fields
+   *
+   * @param filters - Search filters for various device fields
+   * @param pageSize - Number of items per page (default 50, max 100)
+   * @param continuationToken - Token for pagination
+   * @returns Matching sync documents with pagination info
+   */
+  async searchDevices(
+    filters: DeviceSearchFilters,
+    pageSize: number = 50,
+    continuationToken?: string
+  ): Promise<{
+    documents: DeviceSyncDocument[];
+    hasMore: boolean;
+    continuationToken?: string;
+    count: number;
+    ruConsumed: number;
+  }> {
+    const startTime = Date.now();
+
+    try {
+      await this.ensureInitialized();
+      const container = this.getDevicesAllContainer();
+
+      // Build WHERE clause with AND logic for multiple filters
+      const whereClauses: string[] = [];
+      const parameters: Array<{ name: string; value: string }> = [];
+      let paramIndex = 0;
+
+      // syncKey - exact match
+      if (filters.syncKey) {
+        whereClauses.push(`c.syncKey = @syncKey${paramIndex}`);
+        parameters.push({ name: `@syncKey${paramIndex}`, value: filters.syncKey });
+        paramIndex++;
+      }
+
+      // syncState - exact match
+      if (filters.syncState) {
+        whereClauses.push(`c.syncState = @syncState${paramIndex}`);
+        parameters.push({ name: `@syncState${paramIndex}`, value: filters.syncState });
+        paramIndex++;
+      }
+
+      // deviceName - case-insensitive search in intune.deviceName
+      if (filters.deviceName) {
+        whereClauses.push(`CONTAINS(LOWER(c.intune.deviceName), @deviceName${paramIndex})`);
+        parameters.push({ name: `@deviceName${paramIndex}`, value: filters.deviceName.toLowerCase() });
+        paramIndex++;
+      }
+
+      // operatingSystem - case-insensitive search in intune.operatingSystem
+      if (filters.operatingSystem) {
+        whereClauses.push(`CONTAINS(LOWER(c.intune.operatingSystem), @operatingSystem${paramIndex})`);
+        parameters.push({ name: `@operatingSystem${paramIndex}`, value: filters.operatingSystem.toLowerCase() });
+        paramIndex++;
+      }
+
+      // computerDnsName - case-insensitive search in defender.computerDnsName
+      if (filters.computerDnsName) {
+        whereClauses.push(`CONTAINS(LOWER(c.defender.computerDnsName), @computerDnsName${paramIndex})`);
+        parameters.push({ name: `@computerDnsName${paramIndex}`, value: filters.computerDnsName.toLowerCase() });
+        paramIndex++;
+      }
+
+      // osPlatform - case-insensitive search in defender.osPlatform
+      if (filters.osPlatform) {
+        whereClauses.push(`CONTAINS(LOWER(c.defender.osPlatform), @osPlatform${paramIndex})`);
+        parameters.push({ name: `@osPlatform${paramIndex}`, value: filters.osPlatform.toLowerCase() });
+        paramIndex++;
+      }
+
+      // lastIpAddress - exact match in defender.lastIpAddress
+      if (filters.lastIpAddress) {
+        whereClauses.push(`c.defender.lastIpAddress = @lastIpAddress${paramIndex}`);
+        parameters.push({ name: `@lastIpAddress${paramIndex}`, value: filters.lastIpAddress });
+        paramIndex++;
+      }
+
+      // Build final query
+      let query = 'SELECT * FROM c';
+      if (whereClauses.length > 0) {
+        query += ' WHERE ' + whereClauses.join(' AND ');
+      }
+
+      const querySpec = {
+        query,
+        parameters
+      };
+
+      logger.info('[CosmosDB] Searching devices with filters', {
+        filters,
+        pageSize,
+        hasContinuationToken: !!continuationToken,
+        whereClauseCount: whereClauses.length
+      });
+
+      logger.info(`[CosmosDB] QUERY EXE: ${query}`, {
+        parameters: parameters.map(p => ({ name: p.name, value: p.value }))
+      });
+
+      const operation = async () => {
+        return container.items
+          .query<DeviceSyncDocument>(querySpec, {
+            maxItemCount: pageSize,
+            continuationToken
+          })
+          .fetchNext();
+      };
+
+      const response: FeedResponse<DeviceSyncDocument> = await Promise.race([
+        this.retryWithBackoff(operation),
+        this.createTimeoutPromise(this.QUERY_TIMEOUT_MS)
+      ]);
+
+      const executionTime = Date.now() - startTime;
+      const ruConsumed = response.requestCharge || 0;
+
+      this.logQueryTrace({
+        operation: `Search devices`,
+        requestCharge: ruConsumed,
+        executionTime,
+        itemCount: response.resources.length
+      });
+
+      logger.info('[CosmosDB] Device search completed', {
+        count: response.resources.length,
+        hasMore: response.hasMoreResults,
+        ruConsumed: `${ruConsumed.toFixed(2)} RU`,
+        executionTime: `${executionTime}ms`
+      });
+
+      return {
+        documents: response.resources,
+        hasMore: response.hasMoreResults,
+        continuationToken: response.continuationToken,
+        count: response.resources.length,
+        ruConsumed
+      };
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+
+      logger.error('[CosmosDB] Failed to search devices', error as Error, {
+        filters,
+        pageSize,
+        errorCode: (error as { code?: number }).code,
+        executionTime: `${executionTime}ms`
+      });
+
+      throw new ServiceError('Failed to search devices');
     }
   }
 }

@@ -52,6 +52,14 @@ export const openApiSpec = {
     {
       name: 'Vulnerabilities',
       description: 'Operations for Microsoft Defender vulnerability data'
+    },
+    {
+      name: 'Device Sync',
+      description: 'Operations for cross-synced devices from Intune and Defender'
+    },
+    {
+      name: 'Remediations',
+      description: 'Operations for Atera IT incident tickets and remediation tracking'
     }
   ],
   paths: {
@@ -2994,6 +3002,169 @@ export const openApiSpec = {
           }
         }
       }
+    },
+    '/devices/search': {
+      get: {
+        tags: ['Device Sync'],
+        summary: 'Search synced devices',
+        description: 'Search across cross-synced devices from Intune and Defender with flexible filtering. Supports searching in both nested intune and defender objects with case-insensitive partial matching.',
+        operationId: 'searchDevices',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        parameters: [
+          {
+            name: 'syncKey',
+            in: 'query',
+            description: 'Azure AD Device ID or sync key (exact match)',
+            schema: {
+              type: 'string',
+              example: 'a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6'
+            }
+          },
+          {
+            name: 'syncState',
+            in: 'query',
+            description: 'Filter by sync state',
+            schema: {
+              type: 'string',
+              enum: ['matched', 'only_intune', 'only_defender'],
+              example: 'matched'
+            }
+          },
+          {
+            name: 'deviceName',
+            in: 'query',
+            description: 'Search in Intune device name (case-insensitive, partial match)',
+            schema: {
+              type: 'string',
+              example: 'HEAST-PC57'
+            }
+          },
+          {
+            name: 'operatingSystem',
+            in: 'query',
+            description: 'Search in Intune operating system (case-insensitive, partial match)',
+            schema: {
+              type: 'string',
+              example: 'Windows11'
+            }
+          },
+          {
+            name: 'computerDnsName',
+            in: 'query',
+            description: 'Search in Defender DNS name (case-insensitive, partial match)',
+            schema: {
+              type: 'string',
+              example: 'nmiami-pc47'
+            }
+          },
+          {
+            name: 'osPlatform',
+            in: 'query',
+            description: 'Search in Defender OS platform (case-insensitive, partial match)',
+            schema: {
+              type: 'string',
+              example: 'Windows'
+            }
+          },
+          {
+            name: 'lastIpAddress',
+            in: 'query',
+            description: 'Search in Defender last IP address (exact match)',
+            schema: {
+              type: 'string',
+              example: '10.156.0.108'
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (1-100, default 50)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50,
+              example: 50
+            }
+          },
+          {
+            name: 'continuationToken',
+            in: 'query',
+            description: 'Pagination continuation token from previous response',
+            schema: {
+              type: 'string'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Devices found successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    devices: {
+                      type: 'array',
+                      items: {
+                        $ref: '#/components/schemas/DeviceSyncDocument'
+                      }
+                    },
+                    pagination: {
+                      type: 'object',
+                      properties: {
+                        count: {
+                          type: 'integer',
+                          example: 25
+                        },
+                        hasMore: {
+                          type: 'boolean',
+                          example: true
+                        },
+                        continuationToken: {
+                          type: 'string',
+                          nullable: true
+                        }
+                      }
+                    },
+                    filters: {
+                      type: 'object',
+                      description: 'Applied search filters',
+                      properties: {
+                        syncKey: { type: 'string', nullable: true },
+                        syncState: { type: 'string', nullable: true },
+                        deviceName: { type: 'string', nullable: true },
+                        operatingSystem: { type: 'string', nullable: true },
+                        computerDnsName: { type: 'string', nullable: true },
+                        osPlatform: { type: 'string', nullable: true },
+                        lastIpAddress: { type: 'string', nullable: true }
+                      }
+                    },
+                    timestamp: {
+                      type: 'string',
+                      format: 'date-time',
+                      example: '2025-10-24T10:30:00.000Z'
+                    }
+                  }
+                }
+              }
+            }
+          },
+          '400': {
+            $ref: '#/components/responses/BadRequest'
+          },
+          '401': {
+            $ref: '#/components/responses/Unauthorized'
+          },
+          '500': {
+            $ref: '#/components/responses/InternalServerError'
+          }
+        }
+      }
     }
   },
   components: {
@@ -3780,6 +3951,118 @@ export const openApiSpec = {
           }
         },
         required: ['value', 'count', 'percentage']
+      },
+      DeviceSyncDocument: {
+        type: 'object',
+        description: 'Cross-synced device document combining Intune and Defender data',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'Unique document ID (partition key)'
+          },
+          syncKey: {
+            type: 'string',
+            description: 'Azure AD Device ID used for matching (from Intune or Defender)'
+          },
+          syncState: {
+            type: 'string',
+            enum: ['matched', 'only_intune', 'only_defender'],
+            description: 'Sync state indicating which sources contain the device'
+          },
+          syncTimestamp: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Timestamp when this sync document was created/updated'
+          },
+          intune: {
+            allOf: [
+              {
+                $ref: '#/components/schemas/ManagedDevice'
+              }
+            ],
+            nullable: true,
+            description: 'Intune device data (present when syncState is matched or only_intune)'
+          },
+          defender: {
+            allOf: [
+              {
+                $ref: '#/components/schemas/DefenderDevice'
+              }
+            ],
+            nullable: true,
+            description: 'Defender device data (present when syncState is matched or only_defender)'
+          }
+        },
+        required: ['id', 'syncKey', 'syncState', 'syncTimestamp']
+      },
+      DefenderDevice: {
+        type: 'object',
+        description: 'Microsoft Defender for Endpoint device',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Device ID'
+          },
+          computerDnsName: {
+            type: 'string',
+            nullable: true,
+            description: 'Computer DNS name'
+          },
+          osPlatform: {
+            type: 'string',
+            nullable: true,
+            description: 'Operating system platform'
+          },
+          osVersion: {
+            type: 'string',
+            nullable: true,
+            description: 'Operating system version'
+          },
+          lastIpAddress: {
+            type: 'string',
+            nullable: true,
+            description: 'Last known IP address'
+          },
+          lastExternalIpAddress: {
+            type: 'string',
+            nullable: true,
+            description: 'Last external IP address'
+          },
+          aadDeviceId: {
+            type: 'string',
+            nullable: true,
+            description: 'Azure AD Device ID for cross-matching'
+          },
+          healthStatus: {
+            type: 'string',
+            nullable: true,
+            description: 'Device health status'
+          },
+          riskScore: {
+            type: 'string',
+            nullable: true,
+            description: 'Risk score (None, Informational, Low, Medium, High)'
+          },
+          exposureLevel: {
+            type: 'string',
+            nullable: true,
+            description: 'Exposure level'
+          },
+          firstSeen: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true,
+            description: 'First seen timestamp'
+          },
+          lastSeen: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true,
+            description: 'Last seen timestamp'
+          }
+        },
+        required: ['id']
       },
       ManagedDevice: {
         type: 'object',

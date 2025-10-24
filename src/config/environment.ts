@@ -15,6 +15,7 @@ export interface EnvironmentConfig {
     devicesIntuneContainerId: string; // Managed devices from Intune
     devicesDefenderContainerId: string; // Defender devices from Microsoft Defender for Endpoint
     vulnerabilitiesDefenderContainerId: string; // Vulnerabilities from Microsoft Defender for Endpoint
+    remediationsContainerId: string;
   };
   search: {
     endpoint: string;
@@ -68,6 +69,7 @@ export function getEnvironmentConfig(): EnvironmentConfig {
     'COSMOS_DATABASE_ID',
     'COSMOS_CONTAINER_ALERT',
     'COSMOS_CONTAINER_RISK_DETECTION',
+    'COSMOS_CONTAINER_ATERA_TICKETS',
     'COSMOS_CONTAINER_DEVICES_INTUNE',
     'COSMOS_CONTAINER_DEVICES_DEFENDER',
     'COSMOS_CONTAINER_VULNERABILITIES_DEFENDER',
@@ -94,7 +96,8 @@ export function getEnvironmentConfig(): EnvironmentConfig {
       alertStatisticsContainerId: process.env.COSMOS_CONTAINER_ALERT_STATISTICS || 'alerts_statistics',
       devicesIntuneContainerId: process.env.COSMOS_CONTAINER_DEVICES_INTUNE!,
       devicesDefenderContainerId: process.env.COSMOS_CONTAINER_DEVICES_DEFENDER!,
-      vulnerabilitiesDefenderContainerId: process.env.COSMOS_CONTAINER_VULNERABILITIES_DEFENDER!
+      vulnerabilitiesDefenderContainerId: process.env.COSMOS_CONTAINER_VULNERABILITIES_DEFENDER!,
+      remediationsContainerId: process.env.COSMOS_CONTAINER_ATERA_TICKETS!
     },
     search: {
       endpoint: process.env.SEARCH_ENDPOINT!,

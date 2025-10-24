@@ -1077,3 +1077,430 @@ export function validateStatisticsFilters(filters: {
     sanitized: Object.keys(sanitized).length > 0 ? sanitized : undefined
   };
 }
+
+/**
+ * Validates filter object for device search queries
+ */
+export function validateDeviceSearchFilters(filters: {
+  syncKey?: string | null;
+  syncState?: string | null;
+  deviceName?: string | null;
+  operatingSystem?: string | null;
+  computerDnsName?: string | null;
+  osPlatform?: string | null;
+  lastIpAddress?: string | null;
+}): {
+  valid: boolean;
+  errors?: string[];
+  sanitized?: {
+    syncKey?: string;
+    syncState?: 'matched' | 'only_intune' | 'only_defender';
+    deviceName?: string;
+    operatingSystem?: string;
+    computerDnsName?: string;
+    osPlatform?: string;
+    lastIpAddress?: string;
+  };
+} {
+  const errors: string[] = [];
+  const sanitized: {
+    syncKey?: string;
+    syncState?: 'matched' | 'only_intune' | 'only_defender';
+    deviceName?: string;
+    operatingSystem?: string;
+    computerDnsName?: string;
+    osPlatform?: string;
+    lastIpAddress?: string;
+  } = {};
+
+  // Validate syncKey (Azure AD Device ID - UUID format)
+  if (filters.syncKey) {
+    const syncKeyResult = sanitizeQueryParam(
+      filters.syncKey,
+      200,
+      /^[a-zA-Z0-9\-]+$/
+    );
+
+    if (!syncKeyResult.isValid) {
+      errors.push(`syncKey: ${syncKeyResult.error}`);
+    } else if (syncKeyResult.value) {
+      sanitized.syncKey = syncKeyResult.value;
+    }
+  }
+
+  // Validate syncState
+  if (filters.syncState) {
+    const syncStateResult = sanitizeQueryParam(
+      filters.syncState,
+      20,
+      /^[a-z_]+$/
+    );
+
+    if (!syncStateResult.isValid) {
+      errors.push(`syncState: ${syncStateResult.error}`);
+    } else if (syncStateResult.value) {
+      const allowedStates: Array<'matched' | 'only_intune' | 'only_defender'> = [
+        'matched',
+        'only_intune',
+        'only_defender'
+      ];
+
+      if (!allowedStates.includes(syncStateResult.value as any)) {
+        errors.push(`syncState: Must be one of ${allowedStates.join(', ')}`);
+      } else {
+        sanitized.syncState = syncStateResult.value as 'matched' | 'only_intune' | 'only_defender';
+      }
+    }
+  }
+
+  // Validate deviceName (Intune - case-insensitive search)
+  if (filters.deviceName) {
+    const deviceNameResult = sanitizeQueryParam(
+      filters.deviceName,
+      100,
+      /^[a-zA-Z0-9\-_.]+$/
+    );
+
+    if (!deviceNameResult.isValid) {
+      errors.push(`deviceName: ${deviceNameResult.error}`);
+    } else if (deviceNameResult.value) {
+      sanitized.deviceName = deviceNameResult.value;
+    }
+  }
+
+  // Validate operatingSystem (Intune - case-insensitive search)
+  if (filters.operatingSystem) {
+    const osResult = sanitizeQueryParam(
+      filters.operatingSystem,
+      100,
+      /^[a-zA-Z0-9\s.]+$/
+    );
+
+    if (!osResult.isValid) {
+      errors.push(`operatingSystem: ${osResult.error}`);
+    } else if (osResult.value) {
+      sanitized.operatingSystem = osResult.value;
+    }
+  }
+
+  // Validate computerDnsName (Defender - case-insensitive search)
+  if (filters.computerDnsName) {
+    const dnsNameResult = sanitizeQueryParam(
+      filters.computerDnsName,
+      100,
+      /^[a-zA-Z0-9\-_.]+$/
+    );
+
+    if (!dnsNameResult.isValid) {
+      errors.push(`computerDnsName: ${dnsNameResult.error}`);
+    } else if (dnsNameResult.value) {
+      sanitized.computerDnsName = dnsNameResult.value;
+    }
+  }
+
+  // Validate osPlatform (Defender - case-insensitive search)
+  if (filters.osPlatform) {
+    const osPlatformResult = sanitizeQueryParam(
+      filters.osPlatform,
+      100,
+      /^[a-zA-Z0-9\s.]+$/
+    );
+
+    if (!osPlatformResult.isValid) {
+      errors.push(`osPlatform: ${osPlatformResult.error}`);
+    } else if (osPlatformResult.value) {
+      sanitized.osPlatform = osPlatformResult.value;
+    }
+  }
+
+  // Validate lastIpAddress (Defender - exact match)
+  if (filters.lastIpAddress) {
+    const ipResult = sanitizeQueryParam(
+      filters.lastIpAddress,
+      50,
+      /^[0-9.:]+$/
+    );
+
+    if (!ipResult.isValid) {
+      errors.push(`lastIpAddress: ${ipResult.error}`);
+    } else if (ipResult.value) {
+      // Basic IP address format validation (IPv4 or IPv6)
+      const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+      const ipv6Regex = /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/;
+
+      if (!ipv4Regex.test(ipResult.value) && !ipv6Regex.test(ipResult.value)) {
+        errors.push('lastIpAddress: Must be a valid IPv4 or IPv6 address');
+      } else {
+        sanitized.lastIpAddress = ipResult.value;
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors: errors.length > 0 ? errors : undefined,
+    sanitized: Object.keys(sanitized).length > 0 ? sanitized : undefined
+  };
+}
+
+/**
+ * Validates filter object for ticket (remediation) search queries
+ * IMPORTANT: Atera uses numeric IDs (integers), NOT UUIDs
+ */
+export function validateTicketSearchFilters(filters: {
+  ticketId?: string | null;
+  title?: string | null;
+  priority?: string | null;
+  type?: string | null;
+  status?: string | null;
+  source?: string | null;
+  productFamily?: string | null;
+  siteName?: string | null;
+  technicianEmail?: string | null;
+  endUserEmail?: string | null;
+  createdFrom?: string | null;
+  createdTo?: string | null;
+}): {
+  valid: boolean;
+  errors?: string[];
+  sanitized?: {
+    ticketId?: string;
+    title?: string;
+    priority?: string;
+    type?: string;
+    status?: string;
+    source?: string;
+    productFamily?: string;
+    siteName?: string;
+    technicianEmail?: string;
+    endUserEmail?: string;
+    createdFrom?: string;
+    createdTo?: string;
+  };
+} {
+  const errors: string[] = [];
+  const sanitized: {
+    ticketId?: string;
+    title?: string;
+    priority?: string;
+    type?: string;
+    status?: string;
+    source?: string;
+    productFamily?: string;
+    siteName?: string;
+    technicianEmail?: string;
+    endUserEmail?: string;
+    createdFrom?: string;
+    createdTo?: string;
+  } = {};
+
+  // Validate ticketId (numeric/integer only - Atera uses integer IDs like "5876")
+  if (filters.ticketId) {
+    const ticketIdStr = filters.ticketId.trim();
+
+    // Check if it's a valid integer
+    if (!/^\d+$/.test(ticketIdStr)) {
+      errors.push('ticketId: Must be a numeric value (e.g., 5876)');
+    } else {
+      // Validate range (reasonable ticket ID range)
+      const ticketIdNum = parseInt(ticketIdStr, 10);
+      if (ticketIdNum < 1 || ticketIdNum > 999999999) {
+        errors.push('ticketId: Must be between 1 and 999999999');
+      } else {
+        sanitized.ticketId = ticketIdStr; // Keep as string for CosmosDB query
+      }
+    }
+  }
+
+  // Validate title (case-insensitive CONTAINS search)
+  if (filters.title) {
+    const titleResult = sanitizeQueryParam(
+      filters.title,
+      200,
+      /^[a-zA-Z0-9\s\-_.,()]+$/
+    );
+
+    if (!titleResult.isValid) {
+      errors.push(`title: ${titleResult.error}`);
+    } else if (titleResult.value) {
+      sanitized.title = titleResult.value;
+    }
+  }
+
+  // Validate priority
+  if (filters.priority) {
+    const priorityResult = sanitizeQueryParam(
+      filters.priority,
+      20,
+      /^[a-zA-Z]+$/
+    );
+
+    if (!priorityResult.isValid) {
+      errors.push(`priority: ${priorityResult.error}`);
+    } else if (priorityResult.value) {
+      const allowedPriorities = ['Low', 'Medium', 'High', 'Critical'];
+      if (!allowedPriorities.includes(priorityResult.value)) {
+        errors.push(`priority: Must be one of ${allowedPriorities.join(', ')}`);
+      } else {
+        sanitized.priority = priorityResult.value;
+      }
+    }
+  }
+
+  // Validate type
+  if (filters.type) {
+    const typeResult = sanitizeQueryParam(
+      filters.type,
+      50,
+      /^[a-zA-Z\s]+$/
+    );
+
+    if (!typeResult.isValid) {
+      errors.push(`type: ${typeResult.error}`);
+    } else if (typeResult.value) {
+      sanitized.type = typeResult.value;
+    }
+  }
+
+  // Validate status
+  if (filters.status) {
+    const statusResult = sanitizeQueryParam(
+      filters.status,
+      50,
+      /^[a-zA-Z\s]+$/
+    );
+
+    if (!statusResult.isValid) {
+      errors.push(`status: ${statusResult.error}`);
+    } else if (statusResult.value) {
+      sanitized.status = statusResult.value;
+    }
+  }
+
+  // Validate source
+  if (filters.source) {
+    const sourceResult = sanitizeQueryParam(
+      filters.source,
+      50,
+      /^[a-zA-Z\s]+$/
+    );
+
+    if (!sourceResult.isValid) {
+      errors.push(`source: ${sourceResult.error}`);
+    } else if (sourceResult.value) {
+      sanitized.source = sourceResult.value;
+    }
+  }
+
+  // Validate productFamily (case-insensitive CONTAINS search)
+  if (filters.productFamily) {
+    const productFamilyResult = sanitizeQueryParam(
+      filters.productFamily,
+      100,
+      /^[a-zA-Z0-9\s\-_.]+$/
+    );
+
+    if (!productFamilyResult.isValid) {
+      errors.push(`productFamily: ${productFamilyResult.error}`);
+    } else if (productFamilyResult.value) {
+      sanitized.productFamily = productFamilyResult.value;
+    }
+  }
+
+  // Validate siteName (case-insensitive CONTAINS search)
+  if (filters.siteName) {
+    const siteNameResult = sanitizeQueryParam(
+      filters.siteName,
+      100,
+      /^[a-zA-Z0-9\s\-_.]+$/
+    );
+
+    if (!siteNameResult.isValid) {
+      errors.push(`siteName: ${siteNameResult.error}`);
+    } else if (siteNameResult.value) {
+      sanitized.siteName = siteNameResult.value;
+    }
+  }
+
+  // Validate technicianEmail (exact match)
+  if (filters.technicianEmail) {
+    const techEmailResult = sanitizeQueryParam(
+      filters.technicianEmail,
+      200,
+      /^[a-zA-Z0-9\-_@.]+$/
+    );
+
+    if (!techEmailResult.isValid) {
+      errors.push(`technicianEmail: ${techEmailResult.error}`);
+    } else if (techEmailResult.value) {
+      sanitized.technicianEmail = techEmailResult.value;
+    }
+  }
+
+  // Validate endUserEmail (exact match)
+  if (filters.endUserEmail) {
+    const endUserEmailResult = sanitizeQueryParam(
+      filters.endUserEmail,
+      200,
+      /^[a-zA-Z0-9\-_@.]+$/
+    );
+
+    if (!endUserEmailResult.isValid) {
+      errors.push(`endUserEmail: ${endUserEmailResult.error}`);
+    } else if (endUserEmailResult.value) {
+      sanitized.endUserEmail = endUserEmailResult.value;
+    }
+  }
+
+  // Validate createdFrom - accepts both YYYY-MM-DD and ISO 8601 formats
+  if (filters.createdFrom) {
+    // Try YYYY-MM-DD format first (user-friendly)
+    const simpleDateResult = validateDateString(filters.createdFrom, { allowFuture: true });
+    if (simpleDateResult.valid) {
+      // Keep original format (YYYY-MM-DD)
+      sanitized.createdFrom = filters.createdFrom;
+    } else {
+      // Fall back to ISO 8601 format for backward compatibility
+      const isoDateResult = validateISODate(filters.createdFrom);
+      if (isoDateResult.valid) {
+        sanitized.createdFrom = filters.createdFrom;
+      } else {
+        errors.push(`createdFrom: Must be in YYYY-MM-DD format (e.g., 2025-10-21) or ISO 8601 format`);
+      }
+    }
+  }
+
+  // Validate createdTo - accepts both YYYY-MM-DD and ISO 8601 formats
+  if (filters.createdTo) {
+    // Try YYYY-MM-DD format first (user-friendly)
+    const simpleDateResult = validateDateString(filters.createdTo, { allowFuture: true });
+    if (simpleDateResult.valid) {
+      // Keep original format (YYYY-MM-DD)
+      sanitized.createdTo = filters.createdTo;
+    } else {
+      // Fall back to ISO 8601 format for backward compatibility
+      const isoDateResult = validateISODate(filters.createdTo);
+      if (isoDateResult.valid) {
+        sanitized.createdTo = filters.createdTo;
+      } else {
+        errors.push(`createdTo: Must be in YYYY-MM-DD format (e.g., 2025-10-21) or ISO 8601 format`);
+      }
+    }
+  }
+
+  // Validate date range logic
+  if (sanitized.createdFrom && sanitized.createdTo) {
+    const start = new Date(sanitized.createdFrom);
+    const end = new Date(sanitized.createdTo);
+
+    if (start > end) {
+      errors.push('createdFrom must be before or equal to createdTo');
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors: errors.length > 0 ? errors : undefined,
+    sanitized: Object.keys(sanitized).length > 0 ? sanitized : undefined
+  };
+}

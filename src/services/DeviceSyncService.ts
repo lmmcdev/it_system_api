@@ -380,6 +380,72 @@ export class DeviceSyncService {
       throw new ServiceError('Failed to get synced devices');
     }
   }
+
+  /**
+   * Search devices with flexible filtering
+   * Supports searching across Intune and Defender device fields
+   *
+   * @param filters - Search filters (syncKey, syncState, deviceName, operatingSystem, computerDnsName, osPlatform, lastIpAddress)
+   * @param pageSize - Number of items per page
+   * @param continuationToken - Pagination token
+   * @returns Paginated search results
+   */
+  async searchDevices(
+    filters: {
+      syncKey?: string;
+      syncState?: 'matched' | 'only_intune' | 'only_defender';
+      deviceName?: string;
+      operatingSystem?: string;
+      computerDnsName?: string;
+      osPlatform?: string;
+      lastIpAddress?: string;
+    },
+    pageSize: number = 50,
+    continuationToken?: string
+  ): Promise<{
+    devices: DeviceSyncDocument[];
+    pagination: {
+      count: number;
+      hasMore: boolean;
+      continuationToken?: string;
+    };
+  }> {
+    try {
+      logger.info('[DeviceSyncService] Searching devices with filters', {
+        filters,
+        pageSize,
+        hasContinuationToken: !!continuationToken
+      });
+
+      const result = await deviceSyncRepository.searchDevices(
+        filters,
+        pageSize,
+        continuationToken
+      );
+
+      logger.info('[DeviceSyncService] Device search completed', {
+        count: result.count,
+        hasMore: result.hasMore,
+        ruConsumed: `${result.ruConsumed.toFixed(2)} RU`
+      });
+
+      return {
+        devices: result.documents,
+        pagination: {
+          count: result.count,
+          hasMore: result.hasMore,
+          continuationToken: result.continuationToken
+        }
+      };
+    } catch (error) {
+      logger.error('[DeviceSyncService] Failed to search devices', error as Error, {
+        filters,
+        pageSize
+      });
+
+      throw new ServiceError('Failed to search devices');
+    }
+  }
 }
 
 // Export singleton instance
