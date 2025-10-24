@@ -964,16 +964,133 @@ GET /trigger/sync-defender-devices?code=your-key
 
 ---
 
+### POST /devices/sync-cross
+**Description**: Manually trigger cross-synchronization of Intune and Defender devices
+
+**Authentication**: Function key required
+
+**Rate Limit**: 10 requests per hour
+
+**Query Parameters**: None (uses function key for authentication)
+
+**Example**:
+```bash
+POST /devices/sync-cross?code=your-key
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Device cross-sync completed successfully",
+  "timestamp": "2025-10-24T15:30:45.123Z",
+  "data": {
+    "statistics": {
+      "totalProcessed": 1523,
+      "matched": 1245,
+      "onlyIntune": 198,
+      "onlyDefender": 80,
+      "errorCount": 0
+    },
+    "percentages": {
+      "matched": 81.75,
+      "onlyIntune": 13.00,
+      "onlyDefender": 5.25
+    },
+    "performance": {
+      "totalExecutionTimeMs": 45230,
+      "phases": {
+        "fetchDefenderMs": 8542,
+        "fetchIntuneMs": 7891,
+        "matchingMs": 2345,
+        "clearMs": 1234,
+        "upsertMs": 25218
+      }
+    },
+    "resourceUsage": {
+      "totalRuConsumed": 3847.52,
+      "breakdown": {
+        "fetchDefenderRu": 245.30,
+        "fetchIntuneRu": 198.45,
+        "clearRu": 892.15,
+        "upsertRu": 2511.62
+      }
+    },
+    "errors": []
+  }
+}
+```
+
+**Sync States**:
+- `matched`: Device exists in both Intune and Defender
+- `only_intune`: Device only in Intune
+- `only_defender`: Device only in Defender
+
+**Output Container**: `devices_all`
+
+**Document Structure**:
+```json
+{
+  "id": "uuid",
+  "syncKey": "azureADDeviceId",
+  "syncState": "matched",
+  "syncTimestamp": "2025-10-24T15:30:00.000Z",
+  "intune": { /* IntuneDevice */ },
+  "defender": { /* DefenderDevice */ }
+}
+```
+
+**Notes**:
+- Cross-matches devices by Azure AD Device ID
+- Clears `devices_all` container before each sync
+- Processes devices in batches of 100
+- Target completion time: < 1 minute for 1500 devices
+- See `DEVICE-CROSS-SYNC-GUIDE.md` for detailed documentation
+
+---
+
+### syncDevicesCrossTimer (Timer Trigger)
+**Description**: Automatically synchronizes cross-matched devices at scheduled times
+
+**Schedule**: `0 0 6,12,18 * * *` (runs at 06:00, 12:00, 18:00 UTC)
+
+**Not Directly Callable** (use `POST /devices/sync-cross` for manual sync)
+
+**Behavior**:
+- Fetches all devices from `devices_defender` and `devices_intune` containers
+- Cross-matches devices by Azure AD Device ID
+- Generates unified sync documents with three states:
+  - `matched`: Device in both systems
+  - `only_intune`: Device only in Intune
+  - `only_defender`: Device only in Defender
+- Clears `devices_all` container
+- Performs bulk UPSERT to `devices_all` container
+- Logs comprehensive statistics and performance metrics
+
+**Automatic Features**:
+- Runs 1 hour after device syncs (Defender at 5 AM/5 PM, Intune at 11 AM/11 PM)
+- 429 throttling retry with exponential backoff
+- Individual device error tracking
+- Performance and RU consumption monitoring
+
+**Matching Algorithm**:
+- Primary key: `aadDeviceId` (Defender) ↔ `azureADDeviceId` (Intune)
+- Handles null device IDs gracefully
+- Generates unique sync keys for unmatched devices
+
+---
+
 ## 📚 Documentation Links
 
 - **Swagger UI**: `http://localhost:7071/api/swagger`
 - **OpenAPI Spec**: `http://localhost:7071/api/swagger/openapi.json`
 - **Statistics Guide**: `STATISTICS-DAILY-UPSERT.md`
 - **Device Sync Guide**: `DEVICE-SYNC-PROCESS.md`
+- **Device Cross-Sync Guide**: `DEVICE-CROSS-SYNC-GUIDE.md`
 - **Project Docs**: `README.md`, `CLAUDE.md`
 
 ---
 
-**Last Updated**: 2025-10-23
+**Last Updated**: 2025-10-24
 **API Version**: 1.0
-**Total Endpoints**: 25 (23 HTTP + 3 Timer Triggers)
+**Total Endpoints**: 27 (24 HTTP + 4 Timer Triggers)

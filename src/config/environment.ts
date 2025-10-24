@@ -47,6 +47,11 @@ export interface EnvironmentConfig {
     timerSchedule: string;
     containerId: string;
   };
+  deviceCrossSync: {
+    batchSize: number;
+    timerSchedule: string;
+    devicesAllContainerId: string;
+  };
   app: {
     nodeEnv: string;
     logLevel: string;
@@ -121,6 +126,11 @@ export function getEnvironmentConfig(): EnvironmentConfig {
       batchSize: parseInt(process.env.DEFENDER_SYNC_BATCH_SIZE || '100', 10),
       timerSchedule: process.env.DEFENDER_SYNC_TIMER_SCHEDULE || '0 0 */6 * * *', // Every 6 hours
       containerId: process.env.COSMOS_CONTAINER_DEVICES_DEFENDER!
+    },
+    deviceCrossSync: {
+      batchSize: parseInt(process.env.DEVICE_CROSS_SYNC_BATCH_SIZE || '100', 10),
+      timerSchedule: process.env.DEVICE_CROSS_SYNC_TIMER_SCHEDULE || '0 0 6,12,18 * * *', // 6 AM, 12 PM, 6 PM
+      devicesAllContainerId: process.env.COSMOS_CONTAINER_DEVICES_ALL || 'devices_all'
     },
     app: {
       nodeEnv: process.env.NODE_ENV || 'development',

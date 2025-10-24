@@ -5,3 +5,4 @@ export * from './AlertEventService';
 export * from './RiskDetectionService';
 export * from './SearchService';
 export * from './AlertStatisticsService';
+export * from './DeviceSyncService';

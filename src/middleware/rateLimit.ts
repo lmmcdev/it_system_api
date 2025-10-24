@@ -242,6 +242,12 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
   delete: {
     windowMs: 60000,        // 1 minute
     maxRequests: 50         // 50 requests per minute
+  },
+
+  // Device cross-sync manual trigger (expensive operation, strict limit)
+  deviceCrossSync: {
+    windowMs: 3600000,      // 1 hour
+    maxRequests: 10         // 10 requests per hour
   }
 };
 
