@@ -188,10 +188,9 @@ export function validatePaginationParams(
       };
     }
 
-    // Remove any potential injection attempts
-    const sanitized = continuationToken.replace(/[<>\"'`]/g, '');
-
-    if (sanitized !== continuationToken) {
+    // Only check for control characters and XSS vectors (NOT quotes)
+    // Quotes are part of legitimate CosmosDB JSON continuation token format
+    if (/[\x00-\x1F\x7F<>`]/.test(continuationToken)) {
       return {
         valid: false,
         error: 'continuationToken contains invalid characters'

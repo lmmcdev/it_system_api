@@ -341,8 +341,29 @@ describe('Validator Utilities', () => {
       expect(result.error).toContain('too long');
     });
 
-    it('should reject continuation token with invalid characters', () => {
+    it('should reject continuation token with XSS characters', () => {
       const result = validatePaginationParams('50', 'token<script>');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('invalid characters');
+    });
+
+    it('should accept continuation token with quotes (legitimate JSON format)', () => {
+      const tokenWithQuotes = '{"token":"value","page":2}';
+      const result = validatePaginationParams('50', tokenWithQuotes);
+      expect(result.valid).toBe(true);
+      expect(result.continuationToken).toBe(tokenWithQuotes);
+    });
+
+    it('should accept continuation token with single quotes', () => {
+      const tokenWithSingleQuotes = "{'token':'value'}";
+      const result = validatePaginationParams('50', tokenWithSingleQuotes);
+      expect(result.valid).toBe(true);
+      expect(result.continuationToken).toBe(tokenWithSingleQuotes);
+    });
+
+    it('should reject continuation token with control characters', () => {
+      const tokenWithControl = 'token\x00value';
+      const result = validatePaginationParams('50', tokenWithControl);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('invalid characters');
     });
