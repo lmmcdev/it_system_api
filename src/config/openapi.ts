@@ -3035,6 +3035,15 @@ export const openApiSpec = {
             }
           },
           {
+            name: 'deviceId',
+            in: 'query',
+            description: 'Filter by specific device ID (UUID format). Returns only the device matching this exact ID.',
+            required: false,
+            type: 'string',
+            format: 'uuid',
+            example: '12345678-1234-5678-1234-567812345678'
+          },
+          {
             name: 'deviceName',
             in: 'query',
             description: 'Search in Intune device name (case-insensitive, partial match)',
