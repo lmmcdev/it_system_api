@@ -3165,6 +3165,440 @@ export const openApiSpec = {
           }
         }
       }
+    },
+    '/remediations': {
+      get: {
+        tags: ['Remediations'],
+        summary: 'Get all remediation tickets',
+        description: 'Retrieves all Atera IT incident tickets with pagination support',
+        operationId: 'getRemediations',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        parameters: [
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (1-100)',
+            required: false,
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50,
+              example: 50
+            }
+          },
+          {
+            name: 'continuationToken',
+            in: 'query',
+            description: 'Continuation token for pagination (from previous response)',
+            required: false,
+            schema: {
+              type: 'string',
+              nullable: true
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Tickets retrieved successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    tickets: {
+                      type: 'array',
+                      items: {
+                        $ref: '#/components/schemas/AteraTicket'
+                      }
+                    },
+                    pagination: {
+                      type: 'object',
+                      properties: {
+                        count: {
+                          type: 'integer',
+                          example: 50
+                        },
+                        hasMore: {
+                          type: 'boolean',
+                          example: true
+                        },
+                        continuationToken: {
+                          type: 'string',
+                          nullable: true
+                        }
+                      }
+                    },
+                    timestamp: {
+                      type: 'string',
+                      format: 'date-time',
+                      example: '2025-10-24T10:30:00.000Z'
+                    }
+                  }
+                }
+              }
+            }
+          },
+          '400': {
+            $ref: '#/components/responses/BadRequest'
+          },
+          '401': {
+            $ref: '#/components/responses/Unauthorized'
+          },
+          '500': {
+            $ref: '#/components/responses/InternalServerError'
+          }
+        }
+      }
+    },
+    '/remediations/{id}': {
+      get: {
+        tags: ['Remediations'],
+        summary: 'Get remediation ticket by ID',
+        description: 'Retrieves a specific Atera ticket by its numeric ID',
+        operationId: 'getRemediationById',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            description: 'Numeric ticket ID (e.g., 5876)',
+            required: true,
+            schema: {
+              type: 'string',
+              pattern: '^\\d+$',
+              example: '5876'
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Ticket found successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    ticket: {
+                      $ref: '#/components/schemas/AteraTicket'
+                    },
+                    timestamp: {
+                      type: 'string',
+                      format: 'date-time',
+                      example: '2025-10-24T10:30:00.000Z'
+                    }
+                  }
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid ID format',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                },
+                example: {
+                  error: 'Bad Request',
+                  message: 'ID must be a numeric value (e.g., 5876)'
+                }
+              }
+            }
+          },
+          '404': {
+            description: 'Ticket not found',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                },
+                example: {
+                  error: 'Not Found',
+                  message: 'Ticket not found'
+                }
+              }
+            }
+          },
+          '401': {
+            $ref: '#/components/responses/Unauthorized'
+          },
+          '500': {
+            $ref: '#/components/responses/InternalServerError'
+          }
+        }
+      }
+    },
+    '/remediations/search': {
+      get: {
+        tags: ['Remediations'],
+        summary: 'Search remediation tickets',
+        description: 'Search Atera tickets with flexible filtering by various criteria',
+        operationId: 'searchRemediations',
+        security: [
+          {
+            FunctionKey: []
+          }
+        ],
+        parameters: [
+          {
+            name: 'ticketId',
+            in: 'query',
+            description: 'Exact match on Ticket_ID (numeric)',
+            required: false,
+            schema: {
+              type: 'string',
+              pattern: '^\\d+$',
+              example: '5876'
+            }
+          },
+          {
+            name: 'title',
+            in: 'query',
+            description: 'Case-insensitive search in Ticket_title',
+            required: false,
+            schema: {
+              type: 'string',
+              example: 'network issue'
+            }
+          },
+          {
+            name: 'priority',
+            in: 'query',
+            description: 'Filter by priority level',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: ['Low', 'Medium', 'High', 'Critical'],
+              example: 'High'
+            }
+          },
+          {
+            name: 'type',
+            in: 'query',
+            description: 'Filter by ticket type',
+            required: false,
+            schema: {
+              type: 'string',
+              example: 'Incident'
+            }
+          },
+          {
+            name: 'status',
+            in: 'query',
+            description: 'Filter by activity status',
+            required: false,
+            schema: {
+              type: 'string',
+              example: 'In Progress'
+            }
+          },
+          {
+            name: 'source',
+            in: 'query',
+            description: 'Filter by ticket source',
+            required: false,
+            schema: {
+              type: 'string',
+              example: 'Email'
+            }
+          },
+          {
+            name: 'productFamily',
+            in: 'query',
+            description: 'Case-insensitive search in Product_Family',
+            required: false,
+            schema: {
+              type: 'string',
+              example: 'Microsoft 365'
+            }
+          },
+          {
+            name: 'siteName',
+            in: 'query',
+            description: 'Case-insensitive search in Site_name',
+            required: false,
+            schema: {
+              type: 'string',
+              example: 'Corporate Office'
+            }
+          },
+          {
+            name: 'technicianEmail',
+            in: 'query',
+            description: 'Exact match on Technician_email',
+            required: false,
+            schema: {
+              type: 'string',
+              format: 'email',
+              example: 'tech@example.com'
+            }
+          },
+          {
+            name: 'endUserEmail',
+            in: 'query',
+            description: 'Exact match on End_User_email',
+            required: false,
+            schema: {
+              type: 'string',
+              format: 'email',
+              example: 'user@example.com'
+            }
+          },
+          {
+            name: 'createdFrom',
+            in: 'query',
+            description: 'Filter tickets created after this date (YYYY-MM-DD or ISO 8601)',
+            required: false,
+            schema: {
+              type: 'string',
+              format: 'date',
+              example: '2025-10-01'
+            }
+          },
+          {
+            name: 'createdTo',
+            in: 'query',
+            description: 'Filter tickets created before this date (YYYY-MM-DD or ISO 8601)',
+            required: false,
+            schema: {
+              type: 'string',
+              format: 'date',
+              example: '2025-10-31'
+            }
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Number of items per page (1-100)',
+            required: false,
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50,
+              example: 50
+            }
+          },
+          {
+            name: 'continuationToken',
+            in: 'query',
+            description: 'Continuation token for pagination',
+            required: false,
+            schema: {
+              type: 'string',
+              nullable: true
+            }
+          }
+        ],
+        responses: {
+          '200': {
+            description: 'Search completed successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    tickets: {
+                      type: 'array',
+                      items: {
+                        $ref: '#/components/schemas/AteraTicket'
+                      }
+                    },
+                    pagination: {
+                      type: 'object',
+                      properties: {
+                        count: {
+                          type: 'integer',
+                          example: 25
+                        },
+                        hasMore: {
+                          type: 'boolean',
+                          example: false
+                        },
+                        continuationToken: {
+                          type: 'string',
+                          nullable: true
+                        }
+                      }
+                    },
+                    filters: {
+                      type: 'object',
+                      description: 'Applied search filters',
+                      properties: {
+                        ticketId: { type: 'string', nullable: true },
+                        title: { type: 'string', nullable: true },
+                        priority: { type: 'string', nullable: true },
+                        type: { type: 'string', nullable: true },
+                        status: { type: 'string', nullable: true },
+                        source: { type: 'string', nullable: true },
+                        productFamily: { type: 'string', nullable: true },
+                        siteName: { type: 'string', nullable: true },
+                        technicianEmail: { type: 'string', nullable: true },
+                        endUserEmail: { type: 'string', nullable: true },
+                        createdFrom: { type: 'string', nullable: true },
+                        createdTo: { type: 'string', nullable: true }
+                      }
+                    },
+                    timestamp: {
+                      type: 'string',
+                      format: 'date-time',
+                      example: '2025-10-24T10:30:00.000Z'
+                    }
+                  }
+                }
+              }
+            }
+          },
+          '400': {
+            description: 'Invalid search parameters or no filters provided',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/ErrorResponse'
+                },
+                examples: {
+                  noFilters: {
+                    summary: 'No filters provided',
+                    value: {
+                      error: 'Bad Request',
+                      message: 'At least one search filter is required'
+                    }
+                  },
+                  invalidTicketId: {
+                    summary: 'Invalid ticket ID',
+                    value: {
+                      error: 'Bad Request',
+                      message: 'ticketId: Must be a numeric value (e.g., 5876)'
+                    }
+                  },
+                  invalidDateRange: {
+                    summary: 'Invalid date range',
+                    value: {
+                      error: 'Bad Request',
+                      message: 'createdFrom must be before or equal to createdTo'
+                    }
+                  }
+                }
+              }
+            }
+          },
+          '401': {
+            $ref: '#/components/responses/Unauthorized'
+          },
+          '500': {
+            $ref: '#/components/responses/InternalServerError'
+          }
+        }
+      }
     }
   },
   components: {
@@ -4291,6 +4725,164 @@ export const openApiSpec = {
           }
         },
         required: ['id']
+      },
+      AteraTicket: {
+        type: 'object',
+        description: 'Atera IT incident/remediation ticket',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Numeric ticket ID (e.g., "5876")',
+            example: '5876'
+          },
+          doc_type: {
+            type: 'string',
+            description: 'Document type identifier',
+            example: 'atera_ticket'
+          },
+          Ticket_ID: {
+            type: 'string',
+            description: 'Ticket ID (same as id)',
+            example: '5876'
+          },
+          Ticket_title: {
+            type: 'string',
+            description: 'Ticket title/subject',
+            nullable: true,
+            example: 'Network connectivity issue'
+          },
+          Ticket_priority: {
+            type: 'string',
+            description: 'Ticket priority level',
+            nullable: true,
+            enum: ['Low', 'Medium', 'High', 'Critical'],
+            example: 'High'
+          },
+          Ticket_type: {
+            type: 'string',
+            description: 'Type of ticket',
+            nullable: true,
+            example: 'Incident'
+          },
+          Activity_status: {
+            type: 'string',
+            description: 'Current status of the ticket',
+            nullable: true,
+            example: 'In Progress'
+          },
+          Ticket_source: {
+            type: 'string',
+            description: 'How the ticket was created',
+            nullable: true,
+            example: 'Email'
+          },
+          Product_Family: {
+            type: 'string',
+            description: 'Product or service family',
+            nullable: true,
+            example: 'Microsoft 365'
+          },
+          Site_name: {
+            type: 'string',
+            description: 'Customer site name',
+            nullable: true,
+            example: 'Corporate Office'
+          },
+          Technician_email: {
+            type: 'string',
+            description: 'Assigned technician email',
+            nullable: true,
+            format: 'email',
+            example: 'tech@example.com'
+          },
+          End_User_email: {
+            type: 'string',
+            description: 'End user email address',
+            nullable: true,
+            format: 'email',
+            example: 'user@example.com'
+          },
+          Ticket_created_Time: {
+            type: 'string',
+            description: 'When the ticket was created',
+            nullable: true,
+            example: '2025-10-15 09:30:00'
+          },
+          Ticket_resolved_Date: {
+            type: 'string',
+            description: 'Date when ticket was resolved',
+            nullable: true
+          },
+          Ticket_resolved_Time: {
+            type: 'string',
+            description: 'Time when ticket was resolved',
+            nullable: true
+          },
+          Public_IP_address: {
+            type: 'string',
+            description: 'Public IP address associated with ticket',
+            nullable: true
+          },
+          Total_Active_Time_In_Hours: {
+            type: 'string',
+            description: 'Total active time in hours',
+            nullable: true
+          },
+          Total_Active_Time_In_Minutes: {
+            type: 'string',
+            description: 'Total active time in minutes',
+            nullable: true
+          },
+          comments: {
+            type: 'array',
+            description: 'Ticket comments/notes',
+            nullable: true,
+            items: {
+              type: 'object',
+              properties: {
+                Date: { type: 'string' },
+                Comment: { type: 'string' },
+                Email: { type: 'string' },
+                FirstName: { type: 'string' },
+                LastName: { type: 'string' },
+                IsInternal: { type: 'boolean' }
+              }
+            }
+          },
+          Working_Hours: {
+            type: 'array',
+            description: 'Technician work hours logged',
+            nullable: true,
+            items: {
+              type: 'object',
+              properties: {
+                TicketID: { type: 'number' },
+                StartWorkHour: { type: 'string' },
+                EndWorkHour: { type: 'string' },
+                TechnicianFullName: { type: 'string' },
+                TechnicianEmail: { type: 'string' },
+                Billiable: { type: 'boolean' }
+              }
+            }
+          },
+          last_updated: {
+            type: 'string',
+            description: 'Last update timestamp',
+            format: 'date-time',
+            nullable: true
+          },
+          _ts: {
+            type: 'number',
+            description: 'CosmosDB timestamp',
+            nullable: true
+          },
+          _etag: {
+            type: 'string',
+            description: 'CosmosDB entity tag',
+            nullable: true
+          }
+        },
+        required: ['id', 'Ticket_ID']
       },
       DetectedAppManagedDevice: {
         type: 'object',
